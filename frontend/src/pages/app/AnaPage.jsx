@@ -51,7 +51,7 @@ export default function AnaPage() {
     setIsletmePopup(true);
     setIsletmeYuk(true);
     try {
-      const { data } = await api.get('/isletmeler');
+      const { data } = await api.get('/profil/isletmelerim');
       const list = Array.isArray(data) ? data : (data?.data || []);
       setIsletmeler(list);
     } catch { /* sessiz hata */ }
