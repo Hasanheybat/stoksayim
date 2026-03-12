@@ -10,7 +10,7 @@ const GRAD = 'linear-gradient(135deg,#6c53f5 0%,#8b5cf6 100%)';
 
 export default function AppLoginPage() {
   const navigate = useNavigate();
-  const { setKullanici } = useAuthStore();
+  const { oturumKontrol } = useAuthStore();
   const [form, setForm] = useState({ email: '', sifre: '' });
   const [yukleniyor, setYukleniyor] = useState(false);
   const [sifreGoster, setSifreGoster] = useState(false);
@@ -27,7 +27,7 @@ export default function AppLoginPage() {
         return;
       }
       localStorage.setItem('stoksay-token', data.token);
-      setKullanici(data.kullanici);
+      await oturumKontrol();
       navigate(data.kullanici.rol === 'admin' ? '/admin' : '/app');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Email veya şifre hatalı.');
