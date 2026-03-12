@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Camera, ChevronDown, Save, RotateCcw, Trash2 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import api from '../../lib/api';
 import toast from 'react-hot-toast';
 
 const P  = '#6c53f5';
 const PL = 'rgba(108,83,245,0.10)';
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 const BIRIMLER = ['ADET','KG','GR','LT','ML','KOLİ','PAKET','KUTU','ÇUVAL','METRE','RULO','TON'];
 
@@ -203,21 +202,13 @@ export default function StokDuzenle({ stok, onKapat, onKaydedildi, onSilindi }) 
   const sil = async () => {
     setOnayModu(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) { toast.error('Oturum bulunamadı.'); return; }
-
-      const res = await fetch(`${API}/api/urunler/${stok.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${session.access_token}` },
-      });
-      const json = await res.json();
-      if (!res.ok) { toast.error(json.hata || 'Silinemedi.'); return; }
+      await api.delete(`/urunler/${stok.id}`);
 
       toast.success('Ürün silindi.');
       onSilindi?.(stok.id);
       onKapat();
-    } catch {
-      toast.error('Sunucuya bağlanılamadı.');
+    } catch (err) {
+      toast.error(err.response?.data?.hata || 'Sunucuya bağlanılamadı.');
     }
   };
 
@@ -228,39 +219,19 @@ export default function StokDuzenle({ stok, onKapat, onKaydedildi, onSilindi }) 
 
     setKaydediyor(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        toast.error('Oturum bulunamadı. Tekrar giriş yapın.');
-        return;
-      }
-
-      const res = await fetch(`${API}/api/urunler/${stok.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          urun_adi:  form.urun_adi.trim(),
-          isim_2:    form.isim_2.trim(),
-          urun_kodu: form.urun_kodu.trim(),
-          barkodlar: form.barkodlar,
-          birim:     form.birim,
-        }),
+      const { data } = await api.put(`/urunler/${stok.id}`, {
+        urun_adi:  form.urun_adi.trim(),
+        isim_2:    form.isim_2.trim(),
+        urun_kodu: form.urun_kodu.trim(),
+        barkodlar: form.barkodlar,
+        birim:     form.birim,
       });
 
-      const json = await res.json();
-
-      if (!res.ok) {
-        toast.error(json.hata || 'Kaydedilemedi.');
-        return;
-      }
-
       toast.success('Stok güncellendi!');
-      onKaydedildi?.(json);
+      onKaydedildi?.(data);
       onKapat();
-    } catch (e) {
-      toast.error('Sunucuya bağlanılamadı.');
+    } catch (err) {
+      toast.error(err.response?.data?.hata || 'Sunucuya bağlanılamadı.');
     } finally {
       setKaydediyor(false);
     }

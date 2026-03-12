@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { supabase } from '../../lib/supabase';
+import api from '../../lib/api';
 import useAuthStore from '../../store/authStore';
 import { Eye, EyeOff, Lock, ArrowRight, Warehouse } from 'lucide-react';
 
@@ -19,17 +19,20 @@ export default function AppLoginPage() {
     e.preventDefault();
     if (!form.email || !form.sifre) { toast.error('Email ve şifre zorunludur.'); return; }
     setYukleniyor(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email: form.email, password: form.sifre });
-    if (error) { toast.error('Email veya şifre hatalı.'); setYukleniyor(false); return; }
-    const { data: kullanici, error: kHata } = await supabase
-      .from('kullanicilar')
-      .select('id,ad_soyad,email,rol,aktif,ayarlar')
-      .eq('id', data.user.id)
-      .single();
-    if (kHata || !kullanici) { toast.error('Kullanıcı bilgisi alınamadı.'); await supabase.auth.signOut(); setYukleniyor(false); return; }
-    if (!kullanici.aktif) { toast.error('Hesabınız pasif durumdadır.'); await supabase.auth.signOut(); setYukleniyor(false); return; }
-    setKullanici(kullanici);
-    navigate(kullanici.rol === 'admin' ? '/admin' : '/app');
+    try {
+      const { data } = await api.post('/auth/login', { email: form.email, password: form.sifre });
+      if (!data.kullanici.aktif) {
+        toast.error('Hesabınız pasif durumdadır.');
+        setYukleniyor(false);
+        return;
+      }
+      localStorage.setItem('stoksay-token', data.token);
+      setKullanici(data.kullanici);
+      navigate(data.kullanici.rol === 'admin' ? '/admin' : '/app');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Email veya şifre hatalı.');
+      setYukleniyor(false);
+    }
   };
 
   return (

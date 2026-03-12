@@ -1,15 +1,14 @@
 import axios from 'axios';
-import { supabase } from './supabase';
 
 const api = axios.create({
   baseURL: '/api'
 });
 
-// Her istekte Supabase token'ını header'a ekle
-api.interceptors.request.use(async (config) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.access_token) {
-    config.headers.Authorization = `Bearer ${session.access_token}`;
+// Her istekte localStorage'daki token'ı header'a ekle
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('stoksay-token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
@@ -19,7 +18,7 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      supabase.auth.signOut();
+      localStorage.removeItem('stoksay-token');
       window.location.href = '/app-login';
     }
     return Promise.reject(err);

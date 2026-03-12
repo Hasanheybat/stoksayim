@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { supabaseAdmin } = require('../lib/supabase');
+const { pool } = require('../lib/db');
 const authGuard  = require('../middleware/authGuard');
 const adminGuard = require('../middleware/adminGuard');
 
@@ -7,86 +7,85 @@ router.use(authGuard, adminGuard);
 
 // GET /api/stats — Dashboard için tek sorguda tüm sayılar
 router.get('/', async (req, res) => {
-  const [isletme, depo, kullanici, urun, sayimDevam, sayimTamamlandi] = await Promise.all([
-    supabaseAdmin.from('isletmeler').select('*', { count: 'exact', head: true }).eq('aktif', true),
-    supabaseAdmin.from('depolar').select('*', { count: 'exact', head: true }).eq('aktif', true),
-    supabaseAdmin.from('kullanicilar').select('*', { count: 'exact', head: true }).eq('aktif', true),
-    supabaseAdmin.from('isletme_urunler').select('*', { count: 'exact', head: true }).eq('aktif', true),
-    supabaseAdmin.from('sayimlar').select('*', { count: 'exact', head: true }).eq('durum', 'devam'),
-    supabaseAdmin.from('sayimlar').select('*', { count: 'exact', head: true }).eq('durum', 'tamamlandi'),
+  const [
+    [{ c: isletme }],
+    [{ c: depo }],
+    [{ c: kullanici }],
+    [{ c: urun }],
+    [{ c: sayimDevam }],
+    [{ c: sayimTamamlandi }],
+  ] = await Promise.all([
+    pool.execute('SELECT COUNT(*) AS c FROM isletmeler WHERE aktif = 1').then(r => r[0]),
+    pool.execute('SELECT COUNT(*) AS c FROM depolar WHERE aktif = 1').then(r => r[0]),
+    pool.execute('SELECT COUNT(*) AS c FROM kullanicilar WHERE aktif = 1').then(r => r[0]),
+    pool.execute('SELECT COUNT(*) AS c FROM isletme_urunler WHERE aktif = 1').then(r => r[0]),
+    pool.execute("SELECT COUNT(*) AS c FROM sayimlar WHERE durum = 'devam'").then(r => r[0]),
+    pool.execute("SELECT COUNT(*) AS c FROM sayimlar WHERE durum = 'tamamlandi'").then(r => r[0]),
   ]);
 
   res.json({
-    isletme:          isletme.count    || 0,
-    depo:             depo.count       || 0,
-    kullanici:        kullanici.count  || 0,
-    urun:             urun.count       || 0,
-    sayim_devam:      sayimDevam.count      || 0,
-    sayim_tamamlandi: sayimTamamlandi.count || 0,
-    sayim_toplam:     (sayimDevam.count || 0) + (sayimTamamlandi.count || 0),
+    isletme:          isletme    || 0,
+    depo:             depo       || 0,
+    kullanici:        kullanici  || 0,
+    urun:             urun       || 0,
+    sayim_devam:      sayimDevam      || 0,
+    sayim_tamamlandi: sayimTamamlandi || 0,
+    sayim_toplam:     (sayimDevam || 0) + (sayimTamamlandi || 0),
   });
 });
 
 // GET /api/stats/sayim-trend — Son 6 ay aylık sayım sayıları
 router.get('/sayim-trend', async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('sayimlar')
-    .select('durum, created_at')
-    .neq('durum', 'silindi')
-    .gte('created_at', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString())
-    .order('created_at', { ascending: true });
+  const altıAyOnce = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
 
-  if (error) return res.status(500).json({ hata: error.message });
+  const [data] = await pool.execute(
+    "SELECT durum, created_at FROM sayimlar WHERE durum <> 'silindi' AND created_at >= ? ORDER BY created_at ASC",
+    [altıAyOnce]
+  );
+
   res.json(data || []);
 });
 
 // GET /api/stats/isletme-sayimlar — Her işletmedeki sayım dağılımı (top 10)
 router.get('/isletme-sayimlar', async (req, res) => {
-  // Tüm tabloyu çekmek yerine sadece ihtiyaç duyulan sayıları topluyoruz
-  const [devamRes, tamamRes] = await Promise.all([
-    supabaseAdmin
-      .from('sayimlar')
-      .select('isletme_id, isletmeler(ad)', { count: 'exact' })
-      .eq('durum', 'devam'),
-    supabaseAdmin
-      .from('sayimlar')
-      .select('isletme_id, isletmeler(ad)', { count: 'exact' })
-      .eq('durum', 'tamamlandi'),
-  ]);
+  const [rows] = await pool.execute(
+    `SELECT
+       i.ad,
+       COUNT(*) AS toplam,
+       SUM(CASE WHEN s.durum = 'devam' THEN 1 ELSE 0 END) AS devam,
+       SUM(CASE WHEN s.durum = 'tamamlandi' THEN 1 ELSE 0 END) AS tamamlandi
+     FROM sayimlar s
+     JOIN isletmeler i ON i.id = s.isletme_id
+     WHERE s.durum IN ('devam', 'tamamlandi')
+     GROUP BY s.isletme_id, i.ad
+     ORDER BY toplam DESC
+     LIMIT 10`
+  );
 
-  if (devamRes.error) return res.status(500).json({ hata: devamRes.error.message });
-
-  // Gruplama — her iki durum listesini birleştir
-  const map = {};
-  const ekle = (rows, durum) => {
-    for (const s of (rows || [])) {
-      const id = s.isletme_id;
-      const ad = s.isletmeler?.ad || id;
-      if (!map[id]) map[id] = { ad, toplam: 0, devam: 0, tamamlandi: 0 };
-      map[id].toplam++;
-      map[id][durum]++;
-    }
-  };
-  ekle(devamRes.data, 'devam');
-  ekle(tamamRes.data, 'tamamlandi');
-
-  const sonuc = Object.values(map)
-    .sort((a, b) => b.toplam - a.toplam)
-    .slice(0, 10);
-
-  res.json(sonuc);
+  res.json(rows || []);
 });
 
 // GET /api/stats/son-sayimlar — Son 5 sayım
 router.get('/son-sayimlar', async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('sayimlar')
-    .select('id, ad, tarih, durum, created_at, isletmeler(ad), depolar(ad), kullanicilar(ad_soyad)')
-    .order('created_at', { ascending: false })
-    .limit(5);
+  const [rows] = await pool.execute(
+    `SELECT s.id, s.ad, s.tarih, s.durum, s.created_at,
+       i.ad AS isletme_ad, d.ad AS depo_ad, k.ad_soyad AS kullanici_ad_soyad
+     FROM sayimlar s
+     LEFT JOIN isletmeler i ON i.id = s.isletme_id
+     LEFT JOIN depolar d ON d.id = s.depo_id
+     LEFT JOIN kullanicilar k ON k.id = s.kullanici_id
+     ORDER BY s.created_at DESC
+     LIMIT 5`
+  );
 
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json(data || []);
+  const enriched = rows.map(row => ({
+    id: row.id, ad: row.ad, tarih: row.tarih, durum: row.durum, created_at: row.created_at,
+    isletmeler: { ad: row.isletme_ad },
+    depolar: { ad: row.depo_ad },
+    kullanicilar: { ad_soyad: row.kullanici_ad_soyad },
+  }));
+
+  res.json(enriched);
 });
 
 module.exports = router;

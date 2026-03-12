@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { supabaseAdm } from '../../lib/supabaseAdm';
+import apiAdm from '../../lib/apiAdm';
 import useAuthStoreAdm from '../../store/authStoreAdm';
 import { Eye, EyeOff, Mail, Lock, Zap, Warehouse, Users, ArrowRight, Sparkles, ShieldCheck } from 'lucide-react';
 
@@ -28,14 +28,20 @@ export default function LoginPage() {
     e.preventDefault();
     if (!form.email || !form.sifre) { toast.error('Email ve şifre zorunludur.'); return; }
     setYukleniyor(true);
-    const { data, error } = await supabaseAdm.auth.signInWithPassword({ email: form.email, password: form.sifre });
-    if (error) { toast.error('Email veya şifre hatalı.'); setYukleniyor(false); return; }
-    const { data: kullanici, error: kHata } = await supabaseAdm.from('kullanicilar').select('id,ad_soyad,email,rol,aktif,ayarlar').eq('id', data.user.id).single();
-    if (kHata || !kullanici) { toast.error('Kullanıcı bilgisi alınamadı.'); await supabaseAdm.auth.signOut(); setYukleniyor(false); return; }
-    if (!kullanici.aktif) { toast.error('Hesabınız pasif durumdadır.'); await supabaseAdm.auth.signOut(); setYukleniyor(false); return; }
-    if (kullanici.rol !== 'admin') { toast.error('Bu panel sadece yöneticilere özeldir.'); await supabaseAdm.auth.signOut(); setYukleniyor(false); return; }
-    setKullanici(kullanici);
-    navigate('/admin');
+    try {
+      const { data } = await apiAdm.post('/auth/login', { email: form.email, password: form.sifre });
+      if (data.kullanici.rol !== 'admin') {
+        toast.error('Bu panel sadece yöneticilere özeldir.');
+        setYukleniyor(false);
+        return;
+      }
+      localStorage.setItem('stoksay-adm-token', data.token);
+      setKullanici(data.kullanici);
+      navigate('/admin');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Email veya şifre hatalı.');
+      setYukleniyor(false);
+    }
   };
 
   return (

@@ -1,7 +1,8 @@
 const router = require('express').Router();
+const crypto = require('crypto');
 const multer = require('multer');
 const XLSX = require('xlsx');
-const { supabaseAdmin } = require('../lib/supabase');
+const { pool } = require('../lib/db');
 const authGuard = require('../middleware/authGuard');
 const adminGuard = require('../middleware/adminGuard');
 const yetkiGuard = require('../middleware/yetkiGuard');
@@ -32,31 +33,29 @@ async function checkUrunYetki(req, res, islem) {
   if (req.user.rol === 'admin') return true;
 
   // isletme_id'yi ürün kaydından çek
-  const { data: urun, error } = await supabaseAdmin
-    .from('isletme_urunler')
-    .select('isletme_id')
-    .eq('id', req.params.id)
-    .single();
+  const [rows] = await pool.execute(
+    'SELECT isletme_id FROM isletme_urunler WHERE id = ?',
+    [req.params.id]
+  );
 
-  if (error || !urun) {
+  if (!rows.length) {
     res.status(404).json({ hata: 'Ürün bulunamadı.' });
     return false;
   }
 
-  const { data: ki, error: kiErr } = await supabaseAdmin
-    .from('kullanici_isletme')
-    .select('yetkiler')
-    .eq('kullanici_id', req.user.id)
-    .eq('isletme_id', urun.isletme_id)
-    .eq('aktif', true)
-    .single();
+  const urun = rows[0];
 
-  if (kiErr || !ki) {
+  const [kiRows] = await pool.execute(
+    'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
+    [req.user.id, urun.isletme_id]
+  );
+
+  if (!kiRows.length) {
     res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
     return false;
   }
 
-  if (!ki.yetkiler?.urun?.[islem]) {
+  if (!kiRows[0].yetkiler?.urun?.[islem]) {
     res.status(403).json({ hata: `Ürün ${islem} yetkiniz yok.` });
     return false;
   }
@@ -81,28 +80,22 @@ router.put('/:id', async (req, res) => {
     ? barkodlar.map(b => b.trim()).filter(Boolean).join(',')
     : (typeof barkodlar === 'string' ? barkodlar : '');
 
-  const { data, error } = await supabaseAdmin
-    .from('isletme_urunler')
-    .update({
-      urun_adi:                   urun_adi.trim(),
-      urun_kodu:                  urun_kodu.trim(),
-      isim_2:                     (isim_2 || '').trim(),
-      barkodlar:                  barkodStr,
-      birim,
-      son_guncelleme:             new Date(),
-      guncelleme_kaynagi:         'kullanici',
-      kullanici_guncelledi:       true,
-      guncelleyen_kullanici_id:   req.user.id,
-    })
-    .eq('id', req.params.id)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('[PUT /urunler/:id]', error.message);
-    return res.status(500).json({ hata: error.message });
+  try {
+    await pool.execute(
+      `UPDATE isletme_urunler SET
+        urun_adi = ?, urun_kodu = ?, isim_2 = ?, barkodlar = ?, birim = ?,
+        son_guncelleme = NOW(), guncelleme_kaynagi = 'kullanici',
+        kullanici_guncelledi = 1, guncelleyen_kullanici_id = ?
+      WHERE id = ?`,
+      [urun_adi.trim(), urun_kodu.trim(), (isim_2 || '').trim(), barkodStr, birim, req.user.id, req.params.id]
+    );
+    const [rows] = await pool.execute('SELECT * FROM isletme_urunler WHERE id = ?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[PUT /urunler/:id]', err.message);
+    return res.status(500).json({ hata: err.message });
   }
-  res.json(data);
 });
 
 // ── Kullanıcı erişimli: POST / (Yeni Stok Ekle) ──
@@ -117,40 +110,32 @@ router.post('/', yetkiGuard('urun', 'ekle', 'body'), async (req, res) => {
     ? barkodlar.map(b => b.trim()).filter(Boolean).join(',')
     : (typeof barkodlar === 'string' ? barkodlar : '');
 
-  const { data, error } = await supabaseAdmin
-    .from('isletme_urunler')
-    .insert({
-      isletme_id,
-      urun_kodu:                  urun_kodu.trim(),
-      urun_adi:                   urun_adi.trim(),
-      isim_2:                     (isim_2 || '').trim(),
-      birim:                      birim || 'ADET',
-      barkodlar:                  barkodStr,
-      kategori:                   kategori || null,
-      guncelleme_kaynagi:         'kullanici',
-      guncelleyen_kullanici_id:   req.user.id,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    if (error.code === '23505') return res.status(409).json({ hata: 'Bu ürün kodu bu işletmede zaten var.' });
-    return res.status(500).json({ hata: error.message });
+  const id = crypto.randomUUID();
+  try {
+    await pool.execute(
+      `INSERT INTO isletme_urunler
+        (id, isletme_id, urun_kodu, urun_adi, isim_2, birim, barkodlar, kategori, guncelleme_kaynagi, guncelleyen_kullanici_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'kullanici', ?)`,
+      [id, isletme_id, urun_kodu.trim(), urun_adi.trim(), (isim_2 || '').trim(), birim || 'ADET', barkodStr, kategori || null, req.user.id]
+    );
+    const [rows] = await pool.execute('SELECT * FROM isletme_urunler WHERE id = ?', [id]);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.errno === 1062) return res.status(409).json({ hata: 'Bu ürün kodu bu işletmede zaten var.' });
+    return res.status(500).json({ hata: err.message });
   }
-  res.status(201).json(data);
 });
 
 // ── Kullanıcı erişimli: DELETE /:id (Stok Sil) ──
 router.delete('/:id', async (req, res) => {
   if (!await checkUrunYetki(req, res, 'sil')) return;
 
-  const { error } = await supabaseAdmin
-    .from('isletme_urunler')
-    .update({ aktif: false })
-    .eq('id', req.params.id);
-
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json({ mesaj: 'Ürün silindi.' });
+  try {
+    await pool.execute('UPDATE isletme_urunler SET aktif = 0 WHERE id = ?', [req.params.id]);
+    res.json({ mesaj: 'Ürün silindi.' });
+  } catch (err) {
+    return res.status(500).json({ hata: err.message });
+  }
 });
 
 // ── Kullanıcı erişimli: GET /barkod/:barkod?isletme_id=X ──
@@ -160,25 +145,18 @@ router.get('/barkod/:barkod', async (req, res, next) => {
   const { isletme_id } = req.query;
   if (!isletme_id) return res.status(400).json({ hata: 'isletme_id zorunludur.' });
 
-  const { data: ki } = await supabaseAdmin
-    .from('kullanici_isletme')
-    .select('yetkiler')
-    .eq('kullanici_id', req.user.id)
-    .eq('isletme_id', isletme_id)
-    .eq('aktif', true)
-    .single();
+  const [kiRows] = await pool.execute(
+    'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
+    [req.user.id, isletme_id]
+  );
 
-  if (!ki)                           return res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
-  if (!ki.yetkiler?.urun?.goruntule) return res.status(403).json({ hata: 'Ürün görüntüleme yetkiniz yok.' });
+  if (!kiRows.length) return res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
+  if (!kiRows[0].yetkiler?.urun?.goruntule) return res.status(403).json({ hata: 'Ürün görüntüleme yetkiniz yok.' });
 
-  const { data, error } = await supabaseAdmin
-    .from('isletme_urunler')
-    .select('*')
-    .eq('isletme_id', isletme_id)
-    .eq('aktif', true)
-    .like('barkodlar', `%${req.params.barkod}%`);
-
-  if (error) return res.status(500).json({ hata: error.message });
+  const [data] = await pool.execute(
+    'SELECT * FROM isletme_urunler WHERE isletme_id = ? AND aktif = 1 AND barkodlar LIKE ?',
+    [isletme_id, `%${req.params.barkod}%`]
+  );
 
   const urun = (data || []).find(u => {
     const barkodlar = (u.barkodlar || '').split(',').map(b => b.trim());
@@ -197,30 +175,30 @@ router.get('/', async (req, res, next) => {
   const { isletme_id, q } = req.query;
   if (!isletme_id) return res.status(400).json({ hata: 'isletme_id zorunludur.' });
 
-  const { data: ki } = await supabaseAdmin
-    .from('kullanici_isletme')
-    .select('yetkiler')
-    .eq('kullanici_id', req.user.id)
-    .eq('isletme_id', isletme_id)
-    .eq('aktif', true)
-    .single();
+  const [kiRows] = await pool.execute(
+    'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
+    [req.user.id, isletme_id]
+  );
 
-  if (!ki)                           return res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
-  if (!ki.yetkiler?.urun?.goruntule) return res.status(403).json({ hata: 'Ürün görüntüleme yetkiniz yok.' });
+  if (!kiRows.length) return res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
+  if (!kiRows[0].yetkiler?.urun?.goruntule) return res.status(403).json({ hata: 'Ürün görüntüleme yetkiniz yok.' });
 
-  let query = supabaseAdmin
-    .from('isletme_urunler')
-    .select('id, urun_kodu, urun_adi, isim_2, birim, kategori, barkodlar')
-    .eq('isletme_id', isletme_id)
-    .eq('aktif', true)
-    .order('urun_adi');
+  const where = ['isletme_id = ?', 'aktif = 1'];
+  const params = [isletme_id];
 
   if (q) {
-    query = query.or(`urun_adi.ilike.%${q}%,urun_kodu.ilike.%${q}%,barkodlar.ilike.%${q}%,isim_2.ilike.%${q}%`);
+    where.push('(urun_adi LIKE ? OR urun_kodu LIKE ? OR barkodlar LIKE ? OR isim_2 LIKE ?)');
+    params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
   }
 
-  const { data, error } = await query;
-  if (error) return res.status(500).json({ hata: error.message });
+  const [data] = await pool.execute(
+    `SELECT id, urun_kodu, urun_adi, isim_2, birim, kategori, barkodlar
+     FROM isletme_urunler
+     WHERE ${where.join(' AND ')}
+     ORDER BY urun_adi`,
+    params
+  );
+
   res.json(data || []);
 });
 
@@ -264,23 +242,44 @@ router.get('/', async (req, res) => {
   const lm = Math.min(200, Math.max(1, (v => Number.isNaN(v) ? 20 : v)(parseInt(limit))));
   const offset = (sp - 1) * lm;
 
-  let query = supabaseAdmin
-    .from('isletme_urunler')
-    .select('*, isletmeler ( id, ad )', { count: 'exact' })
-    .eq('aktif', true)
-    .order('urun_adi')
-    .range(offset, offset + lm - 1);
+  const where = ['u.aktif = 1'];
+  const params = [];
 
-  if (isletme_id) query = query.eq('isletme_id', isletme_id);
-
+  if (isletme_id) {
+    where.push('u.isletme_id = ?');
+    params.push(isletme_id);
+  }
   if (q) {
-    query = query.or(`urun_adi.ilike.%${q}%,urun_kodu.ilike.%${q}%,barkodlar.ilike.%${q}%,isim_2.ilike.%${q}%`);
+    where.push('(u.urun_adi LIKE ? OR u.urun_kodu LIKE ? OR u.barkodlar LIKE ? OR u.isim_2 LIKE ?)');
+    params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
   }
 
-  const { data, count, error } = await query;
-  if (error) return res.status(500).json({ hata: error.message });
+  const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
 
-  res.json({ data, toplam: count, sayfa: parseInt(sayfa), limit: parseInt(limit) });
+  const [[{ toplam }]] = await pool.execute(
+    `SELECT COUNT(*) AS toplam FROM isletme_urunler u ${whereClause}`,
+    params
+  );
+
+  const [data] = await pool.execute(
+    `SELECT u.*, i.id AS isletme_id_j, i.ad AS isletme_ad
+     FROM isletme_urunler u
+     LEFT JOIN isletmeler i ON i.id = u.isletme_id
+     ${whereClause}
+     ORDER BY u.urun_adi
+     LIMIT ${lm} OFFSET ${offset}`,
+    params
+  );
+
+  const enriched = data.map(row => {
+    const { isletme_id_j, isletme_ad, ...rest } = row;
+    return {
+      ...rest,
+      isletmeler: { id: isletme_id_j, ad: isletme_ad },
+    };
+  });
+
+  res.json({ data: enriched, toplam, sayfa: parseInt(sayfa), limit: parseInt(limit) });
 });
 
 // GET /api/urunler/barkod/:barkod?isletme_id=X
@@ -291,17 +290,13 @@ router.get('/barkod/:barkod', async (req, res) => {
     return res.status(400).json({ hata: 'isletme_id zorunludur.' });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('isletme_urunler')
-    .select('*')
-    .eq('isletme_id', isletme_id)
-    .eq('aktif', true)
-    .like('barkodlar', `%${req.params.barkod}%`);
-
-  if (error) return res.status(500).json({ hata: error.message });
+  const [data] = await pool.execute(
+    'SELECT * FROM isletme_urunler WHERE isletme_id = ? AND aktif = 1 AND barkodlar LIKE ?',
+    [isletme_id, `%${req.params.barkod}%`]
+  );
 
   const urun = data.find(u => {
-    const barkodlar = u.barkodlar.split(',').map(b => b.trim());
+    const barkodlar = (u.barkodlar || '').split(',').map(b => b.trim());
     return barkodlar.includes(req.params.barkod);
   });
 
@@ -311,14 +306,13 @@ router.get('/barkod/:barkod', async (req, res) => {
 
 // GET /api/urunler/:id
 router.get('/:id', async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('isletme_urunler')
-    .select('*')
-    .eq('id', req.params.id)
-    .single();
+  const [rows] = await pool.execute(
+    'SELECT * FROM isletme_urunler WHERE id = ?',
+    [req.params.id]
+  );
 
-  if (error) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
-  res.json(data);
+  if (!rows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
+  res.json(rows[0]);
 });
 
 
@@ -328,15 +322,14 @@ router.post('/:id/barkod', async (req, res) => {
 
   if (!barkod) return res.status(400).json({ hata: 'barkod zorunludur.' });
 
-  const { data: mevcut, error: getError } = await supabaseAdmin
-    .from('isletme_urunler')
-    .select('barkodlar')
-    .eq('id', req.params.id)
-    .single();
+  const [mevcutRows] = await pool.execute(
+    'SELECT barkodlar FROM isletme_urunler WHERE id = ?',
+    [req.params.id]
+  );
 
-  if (getError) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
+  if (!mevcutRows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
 
-  const barkodlar = mevcut.barkodlar
+  const barkodlar = (mevcutRows[0].barkodlar || '')
     .split(',')
     .map(b => b.trim())
     .filter(b => b.length > 0);
@@ -347,41 +340,36 @@ router.post('/:id/barkod', async (req, res) => {
 
   barkodlar.push(barkod);
 
-  const { data, error } = await supabaseAdmin
-    .from('isletme_urunler')
-    .update({ barkodlar: barkodlar.join(','), son_guncelleme: new Date() })
-    .eq('id', req.params.id)
-    .select()
-    .single();
+  await pool.execute(
+    'UPDATE isletme_urunler SET barkodlar = ?, son_guncelleme = NOW() WHERE id = ?',
+    [barkodlar.join(','), req.params.id]
+  );
 
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json(data);
+  const [rows] = await pool.execute('SELECT * FROM isletme_urunler WHERE id = ?', [req.params.id]);
+  res.json(rows[0]);
 });
 
 // DELETE /api/urunler/:id/barkod/:barkod — Barkod sil
 router.delete('/:id/barkod/:barkod', async (req, res) => {
-  const { data: mevcut, error: getError } = await supabaseAdmin
-    .from('isletme_urunler')
-    .select('barkodlar')
-    .eq('id', req.params.id)
-    .single();
+  const [mevcutRows] = await pool.execute(
+    'SELECT barkodlar FROM isletme_urunler WHERE id = ?',
+    [req.params.id]
+  );
 
-  if (getError) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
+  if (!mevcutRows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
 
-  const barkodlar = mevcut.barkodlar
+  const barkodlar = (mevcutRows[0].barkodlar || '')
     .split(',')
     .map(b => b.trim())
     .filter(b => b.length > 0 && b !== req.params.barkod);
 
-  const { data, error } = await supabaseAdmin
-    .from('isletme_urunler')
-    .update({ barkodlar: barkodlar.join(','), son_guncelleme: new Date() })
-    .eq('id', req.params.id)
-    .select()
-    .single();
+  await pool.execute(
+    'UPDATE isletme_urunler SET barkodlar = ?, son_guncelleme = NOW() WHERE id = ?',
+    [barkodlar.join(','), req.params.id]
+  );
 
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json(data);
+  const [rows] = await pool.execute('SELECT * FROM isletme_urunler WHERE id = ?', [req.params.id]);
+  res.json(rows[0]);
 });
 
 // POST /api/urunler/yukle?isletme_id=X&preview=true/false
@@ -419,12 +407,12 @@ router.post('/yukle', (req, res, next) => {
       .filter(b => b.length > 0)
       .join(',');
 
-    const { data: mevcut } = await supabaseAdmin
-      .from('isletme_urunler')
-      .select('id, urun_adi, birim, barkodlar, kullanici_guncelledi')
-      .eq('isletme_id', isletme_id)
-      .eq('urun_kodu', row.urun_kodu.toString())
-      .single();
+    const [mevcutRows] = await pool.execute(
+      'SELECT id, urun_adi, birim, barkodlar, kullanici_guncelledi, admin_version FROM isletme_urunler WHERE isletme_id = ? AND urun_kodu = ?',
+      [isletme_id, row.urun_kodu.toString()]
+    );
+
+    const mevcut = mevcutRows.length ? mevcutRows[0] : null;
 
     if (!mevcut) {
       sonuclar.yeni.push({ ...row, barkodlar });
@@ -451,39 +439,42 @@ router.post('/yukle', (req, res, next) => {
   }
 
   for (const urun of upsertListesi) {
-    const { data: mevcut } = await supabaseAdmin
-      .from('isletme_urunler')
-      .select('barkodlar, kullanici_guncelledi')
-      .eq('isletme_id', isletme_id)
-      .eq('urun_kodu', urun.urun_kodu)
-      .single();
+    const [mevcutRows] = await pool.execute(
+      'SELECT barkodlar, kullanici_guncelledi FROM isletme_urunler WHERE isletme_id = ? AND urun_kodu = ?',
+      [isletme_id, urun.urun_kodu]
+    );
+
+    const mevcut = mevcutRows.length ? mevcutRows[0] : null;
 
     const eskiBarkodlar = (mevcut?.barkodlar || '').split(',').map(b => b.trim()).filter(Boolean);
     const yeniBarkodlar = urun.barkodlar.split(',').map(b => b.trim()).filter(Boolean);
     const tumBarkodlar = [...new Set([...eskiBarkodlar, ...yeniBarkodlar])].join(',');
 
     if (mevcut) {
-      const guncelle = {
-        barkodlar: tumBarkodlar,
-        admin_version: urun.admin_version,
-        son_guncelleme: new Date(),
-        guncelleme_kaynagi: 'admin'
-      };
       if (!mevcut.kullanici_guncelledi) {
-        guncelle.urun_adi = urun.urun_adi;
-        guncelle.isim_2   = urun.isim_2;
-        guncelle.birim    = urun.birim;
-        guncelle.kategori = urun.kategori;
+        await pool.execute(
+          `UPDATE isletme_urunler SET
+            urun_adi = ?, isim_2 = ?, birim = ?, kategori = ?,
+            barkodlar = ?, admin_version = ?, son_guncelleme = NOW(), guncelleme_kaynagi = 'admin'
+          WHERE isletme_id = ? AND urun_kodu = ?`,
+          [urun.urun_adi, urun.isim_2, urun.birim, urun.kategori, tumBarkodlar, urun.admin_version, isletme_id, urun.urun_kodu]
+        );
+      } else {
+        await pool.execute(
+          `UPDATE isletme_urunler SET
+            barkodlar = ?, admin_version = ?, son_guncelleme = NOW(), guncelleme_kaynagi = 'admin'
+          WHERE isletme_id = ? AND urun_kodu = ?`,
+          [tumBarkodlar, urun.admin_version, isletme_id, urun.urun_kodu]
+        );
       }
-      await supabaseAdmin
-        .from('isletme_urunler')
-        .update(guncelle)
-        .eq('isletme_id', isletme_id)
-        .eq('urun_kodu', urun.urun_kodu);
     } else {
-      await supabaseAdmin
-        .from('isletme_urunler')
-        .insert({ ...urun, barkodlar: tumBarkodlar });
+      const id = crypto.randomUUID();
+      await pool.execute(
+        `INSERT INTO isletme_urunler
+          (id, isletme_id, urun_kodu, urun_adi, isim_2, birim, barkodlar, kategori, admin_version)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, isletme_id, urun.urun_kodu, urun.urun_adi, urun.isim_2, urun.birim, tumBarkodlar, urun.kategori, urun.admin_version]
+      );
     }
   }
 

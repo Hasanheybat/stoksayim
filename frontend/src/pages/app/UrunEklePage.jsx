@@ -315,16 +315,18 @@ export default function UrunEklePage() {
     if (!form.urun_id)       { toast.error('Listeden bir ürün seçin.'); return; }
 
     setEkleniyor(true);
-    const { error } = await supabase
-      .from('sayim_kalemleri')
-      .insert({
-        sayim_id: sayimId,
+    try {
+      await api.post(`/sayimlar/${sayimId}/kalem`, {
         urun_id:  form.urun_id,
         miktar:   parseFloat(miktar),
         birim:    form.birim || 'ADET',
       });
+    } catch (err) {
+      setEkleniyor(false);
+      toast.error('Kalem eklenemedi: ' + (err.response?.data?.hata || err.message));
+      return;
+    }
     setEkleniyor(false);
-    if (error) { toast.error('Kalem eklenemedi: ' + error.message); return; }
 
     setSonEklenen(form.isim);
     toast.success('Ürün sayıma eklendi!');

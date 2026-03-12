@@ -1,5 +1,7 @@
 const router = require('express').Router();
-const { supabaseAdmin } = require('../lib/supabase');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const { pool } = require('../lib/db');
 const authGuard = require('../middleware/authGuard');
 const adminGuard = require('../middleware/adminGuard');
 
@@ -9,61 +11,141 @@ router.use(authGuard, adminGuard);
 router.get('/', async (req, res) => {
   const { q, sayfa, limit = 50, filtre, rol } = req.query;
 
-  let query = supabaseAdmin
-    .from('kullanicilar')
-    .select(`
-      id, ad_soyad, email, rol, telefon, aktif, created_at,
-      kullanici_isletme ( aktif, rol_id, roller(id, ad), isletmeler ( id, ad, kod ) )
-    `, { count: 'exact' })
-    .order('ad_soyad');
+  try {
+    const conditions = [];
+    const params = [];
 
-  if (q) query = query.or(`ad_soyad.ilike.%${q}%,email.ilike.%${q}%`);
-  if (filtre === 'Aktif')   query = query.eq('aktif', true);
-  if (filtre === 'Pasif')   query = query.eq('aktif', false);
-  if (rol === 'admin')      query = query.eq('rol', 'admin');
-  if (rol === 'kullanici')  query = query.neq('rol', 'admin');
+    if (q) {
+      conditions.push('(k.ad_soyad LIKE ? OR k.email LIKE ?)');
+      params.push(`%${q}%`, `%${q}%`);
+    }
+    if (filtre === 'Aktif')   { conditions.push('k.aktif = 1'); }
+    if (filtre === 'Pasif')   { conditions.push('k.aktif = 0'); }
+    if (rol === 'admin')      { conditions.push("k.rol = 'admin'"); }
+    if (rol === 'kullanici')  { conditions.push("k.rol != 'admin'"); }
 
-  if (sayfa) {
-    const sp = Math.max(1, (v => Number.isNaN(v) ? 1 : v)(parseInt(sayfa)));
-    const lm = Math.min(200, Math.max(1, (v => Number.isNaN(v) ? 50 : v)(parseInt(limit))));
-    const offset = (sp - 1) * lm;
-    query = query.range(offset, offset + lm - 1);
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    let userIds;
+    let toplam;
+
+    if (sayfa) {
+      const sp = Math.max(1, (v => Number.isNaN(v) ? 1 : v)(parseInt(sayfa)));
+      const lm = Math.min(200, Math.max(1, (v => Number.isNaN(v) ? 50 : v)(parseInt(limit))));
+      const offset = (sp - 1) * lm;
+
+      const [countRows] = await pool.execute(
+        `SELECT COUNT(*) as toplam FROM kullanicilar k ${where}`,
+        params
+      );
+      toplam = countRows[0].toplam;
+
+      const [idRows] = await pool.execute(
+        `SELECT k.id FROM kullanicilar k ${where} ORDER BY k.ad_soyad LIMIT ${lm} OFFSET ${offset}`,
+        params
+      );
+      userIds = idRows.map(r => r.id);
+    } else {
+      const [idRows] = await pool.execute(
+        `SELECT k.id FROM kullanicilar k ${where} ORDER BY k.ad_soyad`,
+        params
+      );
+      userIds = idRows.map(r => r.id);
+    }
+
+    if (!userIds.length) {
+      return sayfa
+        ? res.json({ data: [], toplam: toplam || 0 })
+        : res.json([]);
+    }
+
+    const placeholders = userIds.map(() => '?').join(',');
+
+    const [rows] = await pool.execute(
+      `SELECT k.id, k.ad_soyad, k.email, k.rol, k.telefon, k.aktif, k.created_at,
+              ki.aktif as ki_aktif, ki.rol_id,
+              r.ad as rol_adi,
+              i.id as isletme_id_ref, i.ad as isletme_ad, i.kod as isletme_kod
+       FROM kullanicilar k
+       LEFT JOIN kullanici_isletme ki ON ki.kullanici_id = k.id AND ki.aktif = 1
+       LEFT JOIN roller r ON r.id = ki.rol_id
+       LEFT JOIN isletmeler i ON i.id = ki.isletme_id
+       WHERE k.id IN (${placeholders})
+       ORDER BY k.ad_soyad`,
+      userIds
+    );
+
+    // Group flat rows by kullanici id
+    const map = new Map();
+    for (const row of rows) {
+      if (!map.has(row.id)) {
+        map.set(row.id, {
+          id: row.id,
+          ad_soyad: row.ad_soyad,
+          email: row.email,
+          rol: row.rol,
+          telefon: row.telefon,
+          aktif: row.aktif,
+          created_at: row.created_at,
+          isletmeler: [],
+        });
+      }
+
+      if (row.isletme_id_ref) {
+        map.get(row.id).isletmeler.push({
+          id: row.isletme_id_ref,
+          ad: row.isletme_ad,
+          kod: row.isletme_kod,
+          atanan_rol_id: row.rol_id || null,
+          atanan_rol_adi: row.rol_adi || null,
+        });
+      }
+    }
+
+    // Preserve ordering from userIds
+    const list = userIds.map(id => map.get(id)).filter(Boolean);
+
+    if (sayfa) return res.json({ data: list, toplam });
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
   }
-
-  const { data, count, error } = await query;
-  if (error) return res.status(500).json({ hata: error.message });
-
-  const list = (data || []).map(k => ({
-    ...k,
-    isletmeler: (k.kullanici_isletme || [])
-      .filter(ki => ki.aktif && ki.isletmeler)
-      .map(ki => ({
-        ...ki.isletmeler,
-        atanan_rol_id: ki.rol_id || null,
-        atanan_rol_adi: ki.roller?.ad || null,
-      })),
-  }));
-
-  if (sayfa) return res.json({ data: list, toplam: count });
-  res.json(list); // backward compat
 });
 
 // GET /api/kullanicilar/:id
 router.get('/:id', async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('kullanicilar')
-    .select(`
-      id, ad_soyad, email, rol, telefon, aktif, ayarlar, created_at,
-      kullanici_isletme (
-        id, aktif, yetkiler,
-        isletmeler ( id, ad, kod )
-      )
-    `)
-    .eq('id', req.params.id)
-    .single();
+  try {
+    const [userRows] = await pool.execute(
+      'SELECT id, ad_soyad, email, rol, telefon, aktif, ayarlar, created_at FROM kullanicilar WHERE id = ?',
+      [req.params.id]
+    );
 
-  if (error) return res.status(404).json({ hata: 'Kullanıcı bulunamadı.' });
-  res.json(data);
+    if (!userRows.length) {
+      return res.status(404).json({ hata: 'Kullanıcı bulunamadı.' });
+    }
+
+    const kullanici = userRows[0];
+
+    const [kiRows] = await pool.execute(
+      `SELECT ki.id, ki.aktif, ki.yetkiler,
+              i.id as isletme_id, i.ad as isletme_ad, i.kod as isletme_kod
+       FROM kullanici_isletme ki
+       LEFT JOIN isletmeler i ON i.id = ki.isletme_id
+       WHERE ki.kullanici_id = ?`,
+      [req.params.id]
+    );
+
+    kullanici.kullanici_isletme = kiRows.map(ki => ({
+      id: ki.id,
+      aktif: ki.aktif,
+      yetkiler: ki.yetkiler,
+      isletmeler: ki.isletme_id ? { id: ki.isletme_id, ad: ki.isletme_ad, kod: ki.isletme_kod } : null,
+    }));
+
+    res.json(kullanici);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
 });
 
 // POST /api/kullanicilar — Yeni kullanıcı oluştur
@@ -74,37 +156,27 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ hata: 'ad_soyad, email ve sifre zorunludur.' });
   }
 
-  // Supabase Auth'da kullanıcı oluştur
-  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-    email,
-    password: sifre,
-    email_confirm: true
-  });
+  try {
+    const id = crypto.randomUUID();
+    const password_hash = await bcrypt.hash(sifre, 10);
 
-  if (authError) {
-    return res.status(400).json({ hata: authError.message });
+    await pool.execute(
+      'INSERT INTO kullanicilar (id, ad_soyad, email, password_hash, rol, telefon) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, ad_soyad, email, password_hash, rol || 'kullanici', telefon || null]
+    );
+
+    const [rows] = await pool.execute(
+      'SELECT id, ad_soyad, email, rol, telefon, aktif, created_at FROM kullanicilar WHERE id = ?',
+      [id]
+    );
+
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.errno === 1062) {
+      return res.status(409).json({ hata: 'Bu email zaten kullanımda.' });
+    }
+    res.status(500).json({ hata: err.message });
   }
-
-  // kullanicilar tablosuna kayıt ekle
-  const { data, error } = await supabaseAdmin
-    .from('kullanicilar')
-    .insert({
-      id: authData.user.id,
-      ad_soyad,
-      email,
-      rol: rol || 'kullanici',
-      telefon
-    })
-    .select()
-    .single();
-
-  if (error) {
-    // Auth kullanıcısını geri sil
-    await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-    return res.status(500).json({ hata: error.message });
-  }
-
-  res.status(201).json(data);
 });
 
 // PUT /api/kullanicilar/:id
@@ -121,35 +193,49 @@ router.put('/:id', async (req, res) => {
     }
   }
 
-  // DB güncellemesi
-  const guncelle = {};
-  if (ad_soyad  !== undefined) guncelle.ad_soyad = ad_soyad;
-  if (telefon   !== undefined) guncelle.telefon  = telefon;
-  if (aktif     !== undefined) guncelle.aktif    = aktif;
-  if (rol       !== undefined) guncelle.rol      = rol;
-  if (email     !== undefined) guncelle.email    = email;
+  try {
+    const fields = [];
+    const params = [];
 
-  const { data, error } = await supabaseAdmin
-    .from('kullanicilar')
-    .update(guncelle)
-    .eq('id', req.params.id)
-    .select()
-    .single();
+    if (ad_soyad !== undefined) { fields.push('ad_soyad = ?'); params.push(ad_soyad); }
+    if (telefon !== undefined)  { fields.push('telefon = ?');  params.push(telefon); }
+    if (aktif !== undefined)    { fields.push('aktif = ?');    params.push(aktif ? 1 : 0); }
+    if (rol !== undefined)      { fields.push('rol = ?');      params.push(rol); }
+    if (email !== undefined)    { fields.push('email = ?');    params.push(email); }
 
-  if (error) return res.status(500).json({ hata: error.message });
+    if (sifre !== undefined) {
+      const password_hash = await bcrypt.hash(sifre, 10);
+      fields.push('password_hash = ?');
+      params.push(password_hash);
+    }
 
-  // Supabase Auth senkronizasyonu
-  const authGuncelle = {};
-  if (email !== undefined) authGuncelle.email    = email;
-  if (sifre !== undefined) authGuncelle.password = sifre;
-  if (aktif === true)      authGuncelle.ban_duration = 'none';
-  else if (aktif === false) authGuncelle.ban_duration = '876000h';
+    if (!fields.length) {
+      return res.status(400).json({ hata: 'Güncellenecek alan yok.' });
+    }
 
-  if (Object.keys(authGuncelle).length > 0) {
-    await supabaseAdmin.auth.admin.updateUserById(req.params.id, authGuncelle);
+    params.push(req.params.id);
+
+    await pool.execute(
+      `UPDATE kullanicilar SET ${fields.join(', ')} WHERE id = ?`,
+      params
+    );
+
+    const [rows] = await pool.execute(
+      'SELECT id, ad_soyad, email, rol, telefon, aktif, created_at FROM kullanicilar WHERE id = ?',
+      [req.params.id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ hata: 'Kullanıcı bulunamadı.' });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.errno === 1062) {
+      return res.status(409).json({ hata: 'Bu email zaten kullanımda.' });
+    }
+    res.status(500).json({ hata: err.message });
   }
-
-  res.json(data);
 });
 
 // DELETE /api/kullanicilar/:id — Pasife al
@@ -158,20 +244,16 @@ router.delete('/:id', async (req, res) => {
     return res.status(403).json({ hata: 'Kendi hesabınızı silemezsiniz.' });
   }
 
-  // 1) DB'de pasife al
-  const { error } = await supabaseAdmin
-    .from('kullanicilar')
-    .update({ aktif: false })
-    .eq('id', req.params.id);
+  try {
+    await pool.execute(
+      'UPDATE kullanicilar SET aktif = 0 WHERE id = ?',
+      [req.params.id]
+    );
 
-  if (error) return res.status(500).json({ hata: error.message });
-
-  // 2) Supabase Auth'da da ban'la → giriş yapamaz, mevcut token geçersiz olur
-  await supabaseAdmin.auth.admin.updateUserById(req.params.id, {
-    ban_duration: '876000h', // ~100 yıl
-  });
-
-  res.json({ mesaj: 'Kullanıcı pasife alındı.' });
+    res.json({ mesaj: 'Kullanıcı pasife alındı.' });
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
 });
 
 // POST /api/kullanicilar/:id/isletme — İşletme ata
@@ -182,15 +264,6 @@ router.post('/:id/isletme', async (req, res) => {
     return res.status(400).json({ hata: 'isletme_id zorunludur.' });
   }
 
-  // Mevcut atamayı kontrol et — varsa yetkilerini koru
-  const { data: mevcut } = await supabaseAdmin
-    .from('kullanici_isletme')
-    .select('yetkiler')
-    .eq('kullanici_id', req.params.id)
-    .eq('isletme_id', isletme_id)
-    .maybeSingle();
-
-  // Yeni atama için varsayılan okuma yetkileri (mevcut atamada yetkiler zaten varsa dokunma)
   const varsayilanYetkiler = {
     urun:   { goruntule: true, ekle: false, duzenle: false, sil: false },
     depo:   { goruntule: true, ekle: false, duzenle: false, sil: false },
@@ -198,31 +271,40 @@ router.post('/:id/isletme', async (req, res) => {
     sayim:  { goruntule: true, ekle: false, duzenle: false, sil: false },
   };
 
-  const { data, error } = await supabaseAdmin
-    .from('kullanici_isletme')
-    .upsert({
-      kullanici_id: req.params.id,
-      isletme_id,
-      aktif: true,
-      yetkiler: mevcut?.yetkiler || varsayilanYetkiler,
-    }, { onConflict: 'kullanici_id,isletme_id' })
-    .select()
-    .single();
+  try {
+    const id = crypto.randomUUID();
 
-  if (error) return res.status(500).json({ hata: error.message });
-  res.status(201).json(data);
+    await pool.execute(
+      `INSERT INTO kullanici_isletme (id, kullanici_id, isletme_id, aktif, yetkiler)
+       VALUES (?, ?, ?, 1, ?)
+       ON DUPLICATE KEY UPDATE aktif = 1`,
+      [id, req.params.id, isletme_id, JSON.stringify(varsayilanYetkiler)]
+    );
+
+    // Fetch the actual row (could be newly inserted or existing updated)
+    const [rows] = await pool.execute(
+      'SELECT * FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ?',
+      [req.params.id, isletme_id]
+    );
+
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
 });
 
 // DELETE /api/kullanicilar/:id/isletme/:isletme_id — İşletme atamasını kaldır
 router.delete('/:id/isletme/:isletme_id', async (req, res) => {
-  const { error } = await supabaseAdmin
-    .from('kullanici_isletme')
-    .update({ aktif: false })
-    .eq('kullanici_id', req.params.id)
-    .eq('isletme_id', req.params.isletme_id);
+  try {
+    await pool.execute(
+      'UPDATE kullanici_isletme SET aktif = 0 WHERE kullanici_id = ? AND isletme_id = ?',
+      [req.params.id, req.params.isletme_id]
+    );
 
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json({ mesaj: 'İşletme ataması kaldırıldı.' });
+    res.json({ mesaj: 'İşletme ataması kaldırıldı.' });
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
 });
 
 // GET /api/kullanicilar/:id/yetkiler?isletme_id=X
@@ -233,19 +315,27 @@ router.get('/:id/yetkiler', async (req, res) => {
     return res.status(400).json({ hata: 'isletme_id zorunludur.' });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('kullanici_isletme')
-    .select('yetkiler, rol_id, roller(id, ad)')
-    .eq('kullanici_id', req.params.id)
-    .eq('isletme_id', isletme_id)
-    .single();
+  try {
+    const [rows] = await pool.execute(
+      `SELECT ki.yetkiler, ki.rol_id, r.ad as rol_adi
+       FROM kullanici_isletme ki
+       LEFT JOIN roller r ON r.id = ki.rol_id
+       WHERE ki.kullanici_id = ? AND ki.isletme_id = ?`,
+      [req.params.id, isletme_id]
+    );
 
-  if (error) return res.status(404).json({ hata: 'Atama bulunamadı.' });
-  res.json({
-    yetkiler: data.yetkiler,
-    rol_id:   data.rol_id   || null,
-    rol_adi:  data.roller?.ad || null,
-  });
+    if (!rows.length) {
+      return res.status(404).json({ hata: 'Atama bulunamadı.' });
+    }
+
+    res.json({
+      yetkiler: rows[0].yetkiler,
+      rol_id:   rows[0].rol_id || null,
+      rol_adi:  rows[0].rol_adi || null,
+    });
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
 });
 
 // PUT /api/kullanicilar/:id/yetkiler
@@ -256,19 +346,35 @@ router.put('/:id/yetkiler', async (req, res) => {
     return res.status(400).json({ hata: 'isletme_id ve yetkiler zorunludur.' });
   }
 
-  const guncelle = { yetkiler };
-  if (rol_id !== undefined) guncelle.rol_id = rol_id || null;
+  try {
+    const fields = ['yetkiler = ?'];
+    const params = [JSON.stringify(yetkiler)];
 
-  const { data, error } = await supabaseAdmin
-    .from('kullanici_isletme')
-    .update(guncelle)
-    .eq('kullanici_id', req.params.id)
-    .eq('isletme_id', isletme_id)
-    .select()
-    .single();
+    if (rol_id !== undefined) {
+      fields.push('rol_id = ?');
+      params.push(rol_id || null);
+    }
 
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json(data);
+    params.push(req.params.id, isletme_id);
+
+    await pool.execute(
+      `UPDATE kullanici_isletme SET ${fields.join(', ')} WHERE kullanici_id = ? AND isletme_id = ?`,
+      params
+    );
+
+    const [rows] = await pool.execute(
+      'SELECT * FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ?',
+      [req.params.id, isletme_id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ hata: 'Atama bulunamadı.' });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
 });
 
 module.exports = router;

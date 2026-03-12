@@ -1,8 +1,9 @@
 /**
- * StokSay — Demo Veri Seed Script
+ * StokSay — Demo Veri Seed Script (MariaDB)
  *
  * Oluşturur:
- *   100 kullanıcı  (Supabase Auth + kullanicilar tablosu)
+ *   1 admin kullanıcı (admin@stoksay.com / Admin1234!)
+ *   100 kullanıcı
  *   100 işletme
  *   100 kullanici_isletme bağlantısı (her kullanıcı 1 işletmeye)
  * 1.000 depo       (her işletmeye 10)
@@ -18,14 +19,9 @@
  */
 
 require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
-const { randomUUID }   = require('crypto');
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
+const { pool } = require('./lib/db');
+const bcrypt   = require('bcryptjs');
+const { randomUUID } = require('crypto');
 
 // ─── Sabitler ────────────────────────────────────────────────
 const KATEGORILER = [
@@ -46,15 +42,17 @@ function pad(n, len = 3) { return String(n).padStart(len, '0'); }
 
 function rndDate(daysBack = 180) {
   return new Date(Date.now() - Math.random() * daysBack * 86400000)
-    .toISOString().split('T')[0];
+    .toISOString().slice(0, 19).replace('T', ' ');
 }
 
-async function batchInsert(table, rows, batchSize = 500) {
+async function batchInsert(conn, table, columns, rows, batchSize = 500) {
   let done = 0;
+  const placeholders = `(${columns.map(() => '?').join(',')})`;
   for (let i = 0; i < rows.length; i += batchSize) {
     const batch = rows.slice(i, i + batchSize);
-    const { error } = await supabase.from(table).insert(batch);
-    if (error) throw new Error(`[${table}] ${error.message}`);
+    const sql = `INSERT INTO ${table} (${columns.join(',')}) VALUES ${batch.map(() => placeholders).join(',')}`;
+    const values = batch.flat();
+    await conn.execute(sql, values);
     done += batch.length;
     process.stdout.write(`\r  ↳ ${table}: ${done}/${rows.length} satır`);
   }
@@ -67,215 +65,214 @@ async function seed() {
   console.log('║   StokSay — Demo Veri Oluşturucu   ║');
   console.log('╚════════════════════════════════════╝\n');
   const t0 = Date.now();
+  const conn = await pool.getConnection();
 
-  // ── 1. KULLANICILAR ──────────────────────────────────────
-  console.log(`\n👤 Kullanıcılar oluşturuluyor (${N_KULLANICI})...`);
-  const authUsers = [];
-  const CONCURRENT = 10;
-  for (let b = 0; b < N_KULLANICI / CONCURRENT; b++) {
-    const batch = Array.from({ length: CONCURRENT }, (_, k) => {
-      const idx = b * CONCURRENT + k + 1;
-      return supabase.auth.admin.createUser({
-        email:          `demo${pad(idx)}@stoksay.demo`,
-        password:       'Demo1234!',
-        email_confirm:  true,
-        user_metadata:  { ad_soyad: `Demo Kullanıcı ${pad(idx)}` },
-      });
-    });
-    const results = await Promise.all(batch);
-    results.forEach(({ data, error }) => {
-      if (error) { console.error('\n  ⚠ Auth error:', error.message); return; }
-      authUsers.push(data.user);
-    });
-    process.stdout.write(`\r  ↳ auth.users: ${authUsers.length}/${N_KULLANICI}`);
-  }
-  process.stdout.write('\n');
+  try {
+    const passwordHash = await bcrypt.hash('Demo1234!', 10);
+    const adminHash    = await bcrypt.hash('Admin1234!', 10);
 
-  const profilRows = authUsers.map((u, i) => ({
-    id:       u.id,
-    ad_soyad: `Demo Kullanıcı ${pad(i + 1)}`,
-    email:    u.email,
-    rol:      'kullanici',
-    aktif:    true,
-    ayarlar:  { birim_otomatik: false, barkod_sesi: true, tema: 'light' },
-  }));
-  await batchInsert('kullanicilar', profilRows, N_KULLANICI);
+    // ── 0. ADMIN ─────────────────────────────────────────────
+    console.log('\n👑 Admin kullanıcı oluşturuluyor...');
+    const adminId = randomUUID();
+    await conn.execute(
+      'INSERT IGNORE INTO kullanicilar (id, ad_soyad, email, password_hash, rol, aktif, ayarlar) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [adminId, 'Admin', 'admin@stoksay.com', adminHash, 'admin', true, JSON.stringify({ tema: 'light' })]
+    );
+    console.log('  ↳ admin@stoksay.com / Admin1234!');
 
-  // ── 2. İŞLETMELER ────────────────────────────────────────
-  console.log(`\n🏢 İşletmeler oluşturuluyor (${N_ISLETME})...`);
-  const sehirler = ['İstanbul','Ankara','İzmir','Bursa','Antalya','Adana','Konya','Gaziantep','Mersin','Kayseri'];
-  const isletmeRows = Array.from({ length: N_ISLETME }, (_, i) => ({
-    id:      randomUUID(),
-    ad:      `Demo İşletme ${pad(i + 1)}`,
-    kod:     `ISL${pad(i + 1)}`,
-    adres:   `Demo Cad. No:${i + 1}, ${sehirler[i % sehirler.length]}`,
-    telefon: `0212${pad(1000000 + i, 7).slice(-7)}`,
-    aktif:   true,
-  }));
-  await batchInsert('isletmeler', isletmeRows, N_ISLETME);
-
-  // ── 3. KULLANICI-İŞLETME BAĞLANTISI ──────────────────────
-  console.log('\n🔗 Kullanıcı-İşletme bağlantıları...');
-  const baglantiRows = authUsers.map((u, i) => ({
-    kullanici_id: u.id,
-    isletme_id:   isletmeRows[i % N_ISLETME].id,
-    yetkiler: {
-      urun_ekle:    true,
-      urun_duzenle: true,
-      barkod_ekle:  true,
-      sayim_baslat: true,
-    },
-    aktif: true,
-  }));
-  await batchInsert('kullanici_isletme', baglantiRows, N_KULLANICI);
-
-  // ── 4. DEPOLAR ────────────────────────────────────────────
-  console.log(`\n🏭 Depolar oluşturuluyor (${N_ISLETME * N_DEPO})...`);
-  const depoRows = [];
-  for (const isletme of isletmeRows) {
-    for (let d = 1; d <= N_DEPO; d++) {
-      depoRows.push({
-        id:          randomUUID(),
-        isletme_id:  isletme.id,
-        ad:          `Depo ${d}`,
-        kod:         `D${pad(d, 2)}`,
-        konum:       `Kat ${Math.ceil(d / 2)}, Bölge ${String.fromCharCode(64 + d)}`,
-        aktif:       true,
-      });
+    // ── 1. KULLANICILAR ──────────────────────────────────────
+    console.log(`\n👤 Kullanıcılar oluşturuluyor (${N_KULLANICI})...`);
+    const kullaniciIds = [];
+    const kullaniciRows = [];
+    for (let i = 1; i <= N_KULLANICI; i++) {
+      const id = randomUUID();
+      kullaniciIds.push(id);
+      kullaniciRows.push([
+        id,
+        `Demo Kullanıcı ${pad(i)}`,
+        `demo${pad(i)}@stoksay.demo`,
+        passwordHash,
+        'kullanici',
+        true,
+        JSON.stringify({ birim_otomatik: false, barkod_sesi: true, tema: 'light' }),
+      ]);
     }
-  }
-  await batchInsert('depolar', depoRows, 500);
+    await batchInsert(conn, 'kullanicilar',
+      ['id', 'ad_soyad', 'email', 'password_hash', 'rol', 'aktif', 'ayarlar'],
+      kullaniciRows, N_KULLANICI);
 
-  // ── 5. ÜRÜNLER ────────────────────────────────────────────
-  console.log(`\n📦 Ürünler oluşturuluyor (${N_ISLETME * N_URUN})...`);
-  const urunRows = [];
-  for (let iIdx = 0; iIdx < isletmeRows.length; iIdx++) {
-    const isletme = isletmeRows[iIdx];
-    for (let u = 1; u <= N_URUN; u++) {
-      const kat  = KATEGORILER[u % KATEGORILER.length];
-      const birim = BIRIMLER[u % BIRIMLER.length];
-      urunRows.push({
-        isletme_id: isletme.id,
-        urun_kodu:  `${isletme.kod}-U${pad(u, 4)}`,
-        urun_adi:   `${kat} Ürün ${pad(u, 4)}`,
-        isim_2:     `Stok-${kat.substring(0, 3).toUpperCase()}${pad(u, 4)}`,
-        birim,
-        kategori:   kat,
-        barkodlar:  `869${pad(iIdx * N_URUN + u, 10)}`,
-        aktif:      true,
-      });
+    // ── 2. İŞLETMELER ────────────────────────────────────────
+    console.log(`\n🏢 İşletmeler oluşturuluyor (${N_ISLETME})...`);
+    const sehirler = ['İstanbul','Ankara','İzmir','Bursa','Antalya','Adana','Konya','Gaziantep','Mersin','Kayseri'];
+    const isletmeIds = [];
+    const isletmeRows = [];
+    for (let i = 0; i < N_ISLETME; i++) {
+      const id = randomUUID();
+      isletmeIds.push(id);
+      isletmeRows.push([
+        id,
+        `Demo İşletme ${pad(i + 1)}`,
+        `ISL${pad(i + 1)}`,
+        `Demo Cad. No:${i + 1}, ${sehirler[i % sehirler.length]}`,
+        `0212${pad(1000000 + i, 7).slice(-7)}`,
+        true,
+      ]);
     }
-    if ((iIdx + 1) % 20 === 0)
-      process.stdout.write(`\r  ↳ isletme_urunler hazırlanıyor: ${urunRows.length}/${N_ISLETME * N_URUN}`);
-  }
-  process.stdout.write('\n');
-  await batchInsert('isletme_urunler', urunRows, 1000);
+    await batchInsert(conn, 'isletmeler',
+      ['id', 'ad', 'kod', 'adres', 'telefon', 'aktif'],
+      isletmeRows, N_ISLETME);
 
-  // ── 6. SAYIMLAR ───────────────────────────────────────────
-  console.log(`\n📋 Sayımlar oluşturuluyor (${N_ISLETME * N_DEPO * N_SAYIM})...`);
-  const sayimRows = [];
-  for (let dIdx = 0; dIdx < depoRows.length; dIdx++) {
-    const depo     = depoRows[dIdx];
-    const isletme  = isletmeRows[Math.floor(dIdx / N_DEPO)];
-    const kullanici = authUsers[Math.floor(dIdx / N_DEPO) % authUsers.length];
-    for (let s = 1; s <= N_SAYIM; s++) {
-      sayimRows.push({
-        isletme_id:   isletme.id,
-        depo_id:      depo.id,
-        kullanici_id: kullanici.id,
-        ad:           `Sayım ${pad(s, 2)} — ${depo.ad}`,
-        tarih:        rndDate(180),
-        durum:        DURUMLAR[(dIdx + s) % DURUMLAR.length],
-        notlar:       s % 3 === 0 ? 'Otomatik demo sayımı.' : null,
-      });
+    // ── 3. KULLANICI-İŞLETME BAĞLANTISI ──────────────────────
+    console.log('\n🔗 Kullanıcı-İşletme bağlantıları...');
+    const baglantiRows = kullaniciIds.map((uid, i) => [
+      randomUUID(),
+      uid,
+      isletmeIds[i % N_ISLETME],
+      JSON.stringify({
+        urun:   { goruntule: true, ekle: true, duzenle: true, sil: false },
+        depo:   { goruntule: true, ekle: false, duzenle: false, sil: false },
+        barkod: { tanimla: true, duzenle: false, sil: false },
+        sayim:  { goruntule: true, ekle: true, duzenle: true, sil: false },
+      }),
+      true,
+    ]);
+    await batchInsert(conn, 'kullanici_isletme',
+      ['id', 'kullanici_id', 'isletme_id', 'yetkiler', 'aktif'],
+      baglantiRows, N_KULLANICI);
+
+    // ── 4. DEPOLAR ────────────────────────────────────────────
+    console.log(`\n🏭 Depolar oluşturuluyor (${N_ISLETME * N_DEPO})...`);
+    const depoIds = [];
+    const depoIsletmeMap = [];
+    const depoRows = [];
+    for (let iIdx = 0; iIdx < N_ISLETME; iIdx++) {
+      for (let d = 1; d <= N_DEPO; d++) {
+        const id = randomUUID();
+        depoIds.push(id);
+        depoIsletmeMap.push(iIdx);
+        depoRows.push([
+          id,
+          isletmeIds[iIdx],
+          `Depo ${d}`,
+          `D${pad(d, 2)}`,
+          `Kat ${Math.ceil(d / 2)}, Bölge ${String.fromCharCode(64 + d)}`,
+          true,
+        ]);
+      }
     }
-  }
-  await batchInsert('sayimlar', sayimRows, 500);
+    await batchInsert(conn, 'depolar',
+      ['id', 'isletme_id', 'ad', 'kod', 'konum', 'aktif'],
+      depoRows, 500);
 
-  // ── ÖZET ─────────────────────────────────────────────────
-  const sure = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log('\n╔═══════════════════════════════════════╗');
-  console.log('║          ✅  TAMAMLANDI                ║');
-  console.log('╠═══════════════════════════════════════╣');
-  console.log(`║  ⏱  Süre        : ${String(sure + 's').padEnd(19)}║`);
-  console.log(`║  👤 Kullanıcılar : ${String(authUsers.length).padEnd(19)}║`);
-  console.log(`║  🏢 İşletmeler  : ${String(isletmeRows.length).padEnd(19)}║`);
-  console.log(`║  🏭 Depolar     : ${String(depoRows.length).padEnd(19)}║`);
-  console.log(`║  📦 Ürünler     : ${String(urunRows.length).padEnd(19)}║`);
-  console.log(`║  📋 Sayımlar    : ${String(sayimRows.length).padEnd(19)}║`);
-  console.log('╚═══════════════════════════════════════╝\n');
-  console.log('🔑 Test giriş bilgileri:');
-  console.log('   Email   : demo001@stoksay.demo ... demo100@stoksay.demo');
-  console.log('   Şifre   : Demo1234!\n');
+    // ── 5. ÜRÜNLER ────────────────────────────────────────────
+    console.log(`\n📦 Ürünler oluşturuluyor (${N_ISLETME * N_URUN})...`);
+    // Ürünler çok fazla — batch'ler halinde işle
+    for (let iIdx = 0; iIdx < N_ISLETME; iIdx++) {
+      const urunBatch = [];
+      for (let u = 1; u <= N_URUN; u++) {
+        const kat  = KATEGORILER[u % KATEGORILER.length];
+        const birim = BIRIMLER[u % BIRIMLER.length];
+        urunBatch.push([
+          isletmeIds[iIdx],
+          `ISL${pad(iIdx + 1)}-U${pad(u, 4)}`,
+          `${kat} Ürün ${pad(u, 4)}`,
+          `Stok-${kat.substring(0, 3).toUpperCase()}${pad(u, 4)}`,
+          birim,
+          kat,
+          `869${pad(iIdx * N_URUN + u, 10)}`,
+          true,
+        ]);
+      }
+      await batchInsert(conn, 'isletme_urunler',
+        ['isletme_id', 'urun_kodu', 'urun_adi', 'isim_2', 'birim', 'kategori', 'barkodlar', 'aktif'],
+        urunBatch, 1000);
+      process.stdout.write(`  ↳ İşletme ${iIdx + 1}/${N_ISLETME} tamamlandı\n`);
+    }
+
+    // ── 6. SAYIMLAR ───────────────────────────────────────────
+    console.log(`\n📋 Sayımlar oluşturuluyor (${N_ISLETME * N_DEPO * N_SAYIM})...`);
+    const sayimRows = [];
+    for (let dIdx = 0; dIdx < depoIds.length; dIdx++) {
+      const iIdx = depoIsletmeMap[dIdx];
+      const kIdx = iIdx % kullaniciIds.length;
+      for (let s = 1; s <= N_SAYIM; s++) {
+        sayimRows.push([
+          randomUUID(),
+          isletmeIds[iIdx],
+          depoIds[dIdx],
+          kullaniciIds[kIdx],
+          `Sayım ${pad(s, 2)} — Depo ${(dIdx % N_DEPO) + 1}`,
+          rndDate(180),
+          DURUMLAR[(dIdx + s) % DURUMLAR.length],
+          s % 3 === 0 ? 'Otomatik demo sayımı.' : null,
+        ]);
+      }
+    }
+    await batchInsert(conn, 'sayimlar',
+      ['id', 'isletme_id', 'depo_id', 'kullanici_id', 'ad', 'tarih', 'durum', 'notlar'],
+      sayimRows, 500);
+
+    // ── ÖZET ─────────────────────────────────────────────────
+    const sure = ((Date.now() - t0) / 1000).toFixed(1);
+    console.log('\n╔═══════════════════════════════════════╗');
+    console.log('║          ✅  TAMAMLANDI                ║');
+    console.log('╠═══════════════════════════════════════╣');
+    console.log(`║  ⏱  Süre        : ${String(sure + 's').padEnd(19)}║`);
+    console.log(`║  👤 Kullanıcılar : ${String(N_KULLANICI + 1).padEnd(19)}║`);
+    console.log(`║  🏢 İşletmeler  : ${String(N_ISLETME).padEnd(19)}║`);
+    console.log(`║  🏭 Depolar     : ${String(depoIds.length).padEnd(19)}║`);
+    console.log(`║  📦 Ürünler     : ${String(N_ISLETME * N_URUN).padEnd(19)}║`);
+    console.log(`║  📋 Sayımlar    : ${String(sayimRows.length).padEnd(19)}║`);
+    console.log('╚═══════════════════════════════════════╝\n');
+    console.log('🔑 Test giriş bilgileri:');
+    console.log('   Admin  : admin@stoksay.com / Admin1234!');
+    console.log('   Demo   : demo001@stoksay.demo ... demo100@stoksay.demo / Demo1234!\n');
+  } finally {
+    conn.release();
+    await pool.end();
+  }
 }
 
 // ─── TEMIZLE ─────────────────────────────────────────────────
 async function temizle() {
   console.log('🗑  Demo veriler siliniyor...\n');
   const t0 = Date.now();
+  const conn = await pool.getConnection();
 
-  // Demo e-postalarını bul
-  console.log('  ↳ Demo kullanıcılar aranıyor...');
-  const { data: profiller, error: pErr } = await supabase
-    .from('kullanicilar')
-    .select('id, email')
-    .like('email', '%@stoksay.demo');
-  if (pErr) throw new Error(pErr.message);
-  console.log(`  ↳ ${profiller.length} demo kullanıcı bulundu.`);
+  try {
+    // Demo işletme id'lerini bul
+    const [isletmeler] = await conn.execute("SELECT id FROM isletmeler WHERE kod LIKE 'ISL%'");
+    const isletmeIds = isletmeler.map(i => i.id);
+    console.log(`  ↳ ${isletmeIds.length} demo işletme bulundu.`);
 
-  if (profiller.length === 0) {
-    console.log('  ℹ  Silinecek demo veri bulunamadı.');
-    return;
+    if (isletmeIds.length > 0) {
+      const ph = isletmeIds.map(() => '?').join(',');
+
+      console.log('  ↳ Sayımlar siliniyor...');
+      await conn.execute(`DELETE FROM sayimlar WHERE isletme_id IN (${ph})`, isletmeIds);
+
+      console.log('  ↳ Ürünler siliniyor...');
+      await conn.execute(`DELETE FROM isletme_urunler WHERE isletme_id IN (${ph})`, isletmeIds);
+
+      console.log('  ↳ Depolar siliniyor...');
+      await conn.execute(`DELETE FROM depolar WHERE isletme_id IN (${ph})`, isletmeIds);
+
+      console.log('  ↳ Kullanıcı-İşletme bağlantıları siliniyor...');
+      await conn.execute(`DELETE FROM kullanici_isletme WHERE isletme_id IN (${ph})`, isletmeIds);
+
+      console.log('  ↳ İşletmeler siliniyor...');
+      await conn.execute(`DELETE FROM isletmeler WHERE id IN (${ph})`, isletmeIds);
+    }
+
+    console.log('  ↳ Demo kullanıcılar siliniyor...');
+    await conn.execute("DELETE FROM kullanicilar WHERE email LIKE '%@stoksay.demo'");
+
+    const sure = ((Date.now() - t0) / 1000).toFixed(1);
+    console.log(`\n✅ Temizleme tamamlandı! (${sure}s)\n`);
+  } finally {
+    conn.release();
+    await pool.end();
   }
-
-  const kullaniciIds = profiller.map(p => p.id);
-
-  // Demo işletmelerini bul
-  const { data: isletmeler } = await supabase
-    .from('isletmeler')
-    .select('id')
-    .like('kod', 'ISL%');
-  const isletmeIds = (isletmeler || []).map(i => i.id);
-  console.log(`  ↳ ${isletmeIds.length} demo işletme bulundu.`);
-
-  // Sıralı silme (foreign key'ler nedeniyle)
-  if (isletmeIds.length > 0) {
-    // sayim_kalemleri → sayimlar cascade ile silinir
-    console.log('  ↳ Sayımlar siliniyor...');
-    const { error: sErr } = await supabase.from('sayimlar').delete().in('isletme_id', isletmeIds);
-    if (sErr) console.warn('  ⚠ sayimlar:', sErr.message);
-
-    console.log('  ↳ Ürünler siliniyor...');
-    const { error: uErr } = await supabase.from('isletme_urunler').delete().in('isletme_id', isletmeIds);
-    if (uErr) console.warn('  ⚠ isletme_urunler:', uErr.message);
-
-    console.log('  ↳ Depolar siliniyor...');
-    const { error: dErr } = await supabase.from('depolar').delete().in('isletme_id', isletmeIds);
-    if (dErr) console.warn('  ⚠ depolar:', dErr.message);
-
-    console.log('  ↳ Kullanıcı-İşletme bağlantıları siliniyor...');
-    const { error: bErr } = await supabase.from('kullanici_isletme').delete().in('isletme_id', isletmeIds);
-    if (bErr) console.warn('  ⚠ kullanici_isletme:', bErr.message);
-
-    console.log('  ↳ İşletmeler siliniyor...');
-    const { error: iErr } = await supabase.from('isletmeler').delete().in('id', isletmeIds);
-    if (iErr) console.warn('  ⚠ isletmeler:', iErr.message);
-  }
-
-  console.log('  ↳ Kullanıcı profilleri siliniyor...');
-  const { error: kErr } = await supabase.from('kullanicilar').delete().in('id', kullaniciIds);
-  if (kErr) console.warn('  ⚠ kullanicilar:', kErr.message);
-
-  console.log('  ↳ Auth kullanıcılar siliniyor...');
-  let authSilinen = 0;
-  for (const id of kullaniciIds) {
-    const { error } = await supabase.auth.admin.deleteUser(id);
-    if (!error) authSilinen++;
-  }
-
-  const sure = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`\n✅ Temizleme tamamlandı! (${sure}s)`);
-  console.log(`   🗑  ${authSilinen} auth kullanıcı, ${isletmeIds.length} işletme ve tüm ilişkili veriler silindi.\n`);
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────

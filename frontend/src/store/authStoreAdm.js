@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { supabaseAdm } from '../lib/supabaseAdm';
+import apiAdm from '../lib/apiAdm';
 
 const useAuthStoreAdm = create(
   persist(
@@ -12,22 +12,24 @@ const useAuthStoreAdm = create(
 
       oturumKontrol: async () => {
         set({ yukleniyor: true });
-        const { data: { session } } = await supabaseAdm.auth.getSession();
+        const token = localStorage.getItem('stoksay-adm-token');
 
-        if (session?.user) {
-          const { data } = await supabaseAdm
-            .from('kullanicilar')
-            .select('id, ad_soyad, email, rol, aktif, ayarlar')
-            .eq('id', session.user.id)
-            .single();
-          set({ kullanici: data, yukleniyor: false });
-        } else {
+        if (!token) {
+          set({ kullanici: null, yukleniyor: false });
+          return;
+        }
+
+        try {
+          const { data } = await apiAdm.get('/auth/me');
+          set({ kullanici: data.kullanici, yukleniyor: false });
+        } catch {
+          localStorage.removeItem('stoksay-adm-token');
           set({ kullanici: null, yukleniyor: false });
         }
       },
 
       cikisYap: async () => {
-        await supabaseAdm.auth.signOut();
+        localStorage.removeItem('stoksay-adm-token');
         set({ kullanici: null });
       }
     }),

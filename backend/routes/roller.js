@@ -1,5 +1,6 @@
 const router = require('express').Router();
-const { supabaseAdmin } = require('../lib/supabase');
+const crypto = require('crypto');
+const { pool } = require('../lib/db');
 const authGuard  = require('../middleware/authGuard');
 const adminGuard = require('../middleware/adminGuard');
 
@@ -8,14 +9,15 @@ router.use(authGuard, adminGuard);
 
 // GET /api/roller — Tüm rolleri listele
 router.get('/', async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('roller')
-    .select('*')
-    .order('sistem', { ascending: false }) // sistem rolleri önce
-    .order('created_at');
+  try {
+    const [rows] = await pool.execute(
+      'SELECT * FROM roller ORDER BY sistem DESC, created_at ASC'
+    );
 
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json(data || []);
+    res.json(rows || []);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
 });
 
 // POST /api/roller — Yeni özel rol oluştur
@@ -26,27 +28,33 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ hata: 'Rol adı zorunludur.' });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('roller')
-    .insert({
-      ad:      ad.trim(),
-      yetkiler: yetkiler || {
-        urun:   { goruntule: true,  ekle: false, duzenle: false, sil: false },
-        depo:   { goruntule: true,  ekle: false, duzenle: false, sil: false },
-        barkod: { tanimla: false,   duzenle: false, sil: false },
-        sayim:  { goruntule: true,  ekle: true,  duzenle: false, sil: false },
-      },
-      sistem: false,
-    })
-    .select()
-    .single();
+  const varsayilanYetkiler = {
+    urun:   { goruntule: true,  ekle: false, duzenle: false, sil: false },
+    depo:   { goruntule: true,  ekle: false, duzenle: false, sil: false },
+    barkod: { tanimla: false,   duzenle: false, sil: false },
+    sayim:  { goruntule: true,  ekle: true,  duzenle: false, sil: false },
+  };
 
-  if (error) {
-    if (error.code === '23505') return res.status(409).json({ hata: 'Bu rol adı zaten mevcut.' });
-    return res.status(500).json({ hata: error.message });
+  try {
+    const id = crypto.randomUUID();
+
+    await pool.execute(
+      'INSERT INTO roller (id, ad, yetkiler, sistem) VALUES (?, ?, ?, 0)',
+      [id, ad.trim(), JSON.stringify(yetkiler || varsayilanYetkiler)]
+    );
+
+    const [rows] = await pool.execute(
+      'SELECT * FROM roller WHERE id = ?',
+      [id]
+    );
+
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.errno === 1062) {
+      return res.status(409).json({ hata: 'Bu rol adı zaten mevcut.' });
+    }
+    res.status(500).json({ hata: err.message });
   }
-
-  res.status(201).json(data);
 });
 
 // PUT /api/roller/:id — Rol güncelle (yetki matrisi + ad)
@@ -54,76 +62,98 @@ router.put('/:id', async (req, res) => {
   const { ad, yetkiler } = req.body;
 
   const guncelle = {};
-  if (ad      !== undefined) guncelle.ad      = ad.trim();
+  if (ad !== undefined)       guncelle.ad = ad.trim();
   if (yetkiler !== undefined) guncelle.yetkiler = yetkiler;
 
   if (Object.keys(guncelle).length === 0) {
     return res.status(400).json({ hata: 'Güncellenecek alan yok.' });
   }
 
-  // Sistem rollerinin adı değiştirilemez
-  if (ad !== undefined) {
-    const { data: mevcut } = await supabaseAdmin
-      .from('roller')
-      .select('sistem')
-      .eq('id', req.params.id)
-      .single();
+  try {
+    // Sistem rollerinin adı değiştirilemez
+    if (ad !== undefined) {
+      const [mevcutRows] = await pool.execute(
+        'SELECT sistem FROM roller WHERE id = ?',
+        [req.params.id]
+      );
 
-    if (mevcut?.sistem) {
-      delete guncelle.ad; // sistem rolünün adını değiştirme
+      if (mevcutRows.length && mevcutRows[0].sistem) {
+        delete guncelle.ad;
+      }
     }
+
+    const fields = [];
+    const params = [];
+
+    if (guncelle.ad !== undefined)       { fields.push('ad = ?');       params.push(guncelle.ad); }
+    if (guncelle.yetkiler !== undefined) { fields.push('yetkiler = ?'); params.push(JSON.stringify(guncelle.yetkiler)); }
+
+    if (fields.length) {
+      params.push(req.params.id);
+      await pool.execute(
+        `UPDATE roller SET ${fields.join(', ')} WHERE id = ?`,
+        params
+      );
+    }
+
+    // Yetkiler değiştiyse, bu role atanmış tüm kullanici_isletme kayıtlarını da güncelle
+    if (yetkiler !== undefined) {
+      await pool.execute(
+        'UPDATE kullanici_isletme SET yetkiler = ? WHERE rol_id = ?',
+        [JSON.stringify(yetkiler), req.params.id]
+      );
+    }
+
+    const [rows] = await pool.execute(
+      'SELECT * FROM roller WHERE id = ?',
+      [req.params.id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ hata: 'Rol bulunamadı.' });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.errno === 1062) {
+      return res.status(409).json({ hata: 'Bu rol adı zaten mevcut.' });
+    }
+    res.status(500).json({ hata: err.message });
   }
-
-  const { data, error } = await supabaseAdmin
-    .from('roller')
-    .update(guncelle)
-    .eq('id', req.params.id)
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ hata: error.message });
-
-  // Yetkiler değiştiyse, bu role atanmış tüm kullanici_isletme kayıtlarını da güncelle
-  if (yetkiler !== undefined) {
-    await supabaseAdmin
-      .from('kullanici_isletme')
-      .update({ yetkiler })
-      .eq('rol_id', req.params.id);
-  }
-
-  res.json(data);
 });
 
 // DELETE /api/roller/:id — Rol sil (sadece özel roller)
 router.delete('/:id', async (req, res) => {
-  // Sistem rolü olup olmadığını kontrol et
-  const { data: rol, error: getErr } = await supabaseAdmin
-    .from('roller')
-    .select('sistem, ad')
-    .eq('id', req.params.id)
-    .single();
+  try {
+    // Sistem rolü olup olmadığını kontrol et
+    const [rolRows] = await pool.execute(
+      'SELECT sistem, ad FROM roller WHERE id = ?',
+      [req.params.id]
+    );
 
-  if (getErr || !rol) {
-    return res.status(404).json({ hata: 'Rol bulunamadı.' });
+    if (!rolRows.length) {
+      return res.status(404).json({ hata: 'Rol bulunamadı.' });
+    }
+
+    if (rolRows[0].sistem) {
+      return res.status(403).json({ hata: `"${rolRows[0].ad}" sistem rolü silinemez.` });
+    }
+
+    // Bu role atanmış kullanici_isletme kayıtlarının rol_id'sini temizle
+    await pool.execute(
+      'UPDATE kullanici_isletme SET rol_id = NULL WHERE rol_id = ?',
+      [req.params.id]
+    );
+
+    await pool.execute(
+      'DELETE FROM roller WHERE id = ?',
+      [req.params.id]
+    );
+
+    res.json({ mesaj: 'Rol silindi.' });
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
   }
-
-  if (rol.sistem) {
-    return res.status(403).json({ hata: `"${rol.ad}" sistem rolü silinemez.` });
-  }
-
-  // Bu role atanmış kullanici_isletme kayıtlarının rol_id'sini temizle
-  await supabaseAdmin
-    .from('kullanici_isletme')
-    .update({ rol_id: null })
-    .eq('rol_id', req.params.id);
-
-  const { error } = await supabaseAdmin
-    .from('roller')
-    .delete()
-    .eq('id', req.params.id);
-
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json({ mesaj: 'Rol silindi.' });
 });
 
 module.exports = router;

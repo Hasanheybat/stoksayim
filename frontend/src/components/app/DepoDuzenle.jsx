@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { X, Save, RotateCcw, Trash2 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import api from '../../lib/api';
 import toast from 'react-hot-toast';
 
 const P  = '#6c53f5';
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export default function DepoDuzenle({ depo, onKapat, onKaydedildi, onSilindi }) {
   const baslangic = { ad: depo?.ad || '' };
@@ -22,21 +21,13 @@ export default function DepoDuzenle({ depo, onKapat, onKaydedildi, onSilindi }) 
   const sil = async () => {
     setOnayModu(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) { toast.error('Oturum bulunamadı.'); return; }
-
-      const res = await fetch(`${API}/api/depolar/${depo.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${session.access_token}` },
-      });
-      const json = await res.json();
-      if (!res.ok) { toast.error(json.hata || 'Silinemedi.'); return; }
+      await api.delete(`/depolar/${depo.id}`);
 
       toast.success('Depo silindi.');
       onSilindi?.(depo.id);
       onKapat();
-    } catch {
-      toast.error('Sunucuya bağlanılamadı.');
+    } catch (err) {
+      toast.error(err.response?.data?.hata || 'Sunucuya bağlanılamadı.');
     }
   };
 
@@ -45,25 +36,13 @@ export default function DepoDuzenle({ depo, onKapat, onKaydedildi, onSilindi }) 
 
     setKaydediyor(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) { toast.error('Oturum bulunamadı.'); return; }
-
-      const res = await fetch(`${API}/api/depolar/${depo.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ ad: form.ad.trim() }),
-      });
-      const json = await res.json();
-      if (!res.ok) { toast.error(json.hata || 'Kaydedilemedi.'); return; }
+      const { data } = await api.put(`/depolar/${depo.id}`, { ad: form.ad.trim() });
 
       toast.success('Depo güncellendi!');
-      onKaydedildi?.(json);
+      onKaydedildi?.(data);
       onKapat();
-    } catch {
-      toast.error('Sunucuya bağlanılamadı.');
+    } catch (err) {
+      toast.error(err.response?.data?.hata || 'Sunucuya bağlanılamadı.');
     } finally {
       setKaydediyor(false);
     }

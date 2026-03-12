@@ -50,12 +50,11 @@ export default function AnaPage() {
   const handleIsletmeler = async () => {
     setIsletmePopup(true);
     setIsletmeYuk(true);
-    const { data } = await supabase
-      .from('kullanici_isletme')
-      .select('isletmeler(id, ad, kod, aktif)')
-      .eq('kullanici_id', kullanici.id)
-      .eq('aktif', true);
-    setIsletmeler((data || []).map(k => k.isletmeler).filter(i => i?.aktif === true));
+    try {
+      const { data } = await api.get('/isletmeler');
+      const list = Array.isArray(data) ? data : (data?.data || []);
+      setIsletmeler(list);
+    } catch { /* sessiz hata */ }
     setIsletmeYuk(false);
   };
 

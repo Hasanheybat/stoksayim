@@ -1,4 +1,4 @@
-const { supabaseAdmin } = require('../lib/supabase');
+const { pool } = require('../lib/db');
 
 /**
  * Yetki kontrolü middleware factory
@@ -21,19 +21,16 @@ function yetkiGuard(kategori, islem, isletmeIdSource = 'query') {
       return res.status(400).json({ hata: 'isletme_id gerekli.' });
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('kullanici_isletme')
-      .select('yetkiler')
-      .eq('kullanici_id', req.user.id)
-      .eq('isletme_id', isletme_id)
-      .eq('aktif', true)
-      .single();
+    const [rows] = await pool.execute(
+      'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
+      [req.user.id, isletme_id]
+    );
 
-    if (error || !data) {
+    if (!rows.length) {
       return res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
     }
 
-    const yetkiler = data.yetkiler;
+    const yetkiler = rows[0].yetkiler;
 
     if (!yetkiler[kategori] || !yetkiler[kategori][islem]) {
       return res.status(403).json({

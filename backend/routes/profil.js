@@ -1,63 +1,80 @@
 const router = require('express').Router();
-const { supabaseAdmin } = require('../lib/supabase');
+const { pool } = require('../lib/db');
 const authGuard = require('../middleware/authGuard');
 
 router.use(authGuard);
 
 // GET /api/profil/isletmelerim — kullanıcının işletmeleri (pasif dahil, RLS bypass)
 router.get('/isletmelerim', async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('kullanici_isletme')
-    .select('isletmeler(id, ad, kod, aktif)')
-    .eq('kullanici_id', req.user.id)
-    .eq('aktif', true);
+  try {
+    const [rows] = await pool.execute(
+      `SELECT i.id, i.ad, i.kod, i.aktif
+       FROM kullanici_isletme ki
+       JOIN isletmeler i ON i.id = ki.isletme_id
+       WHERE ki.kullanici_id = ? AND ki.aktif = 1`,
+      [req.user.id]
+    );
 
-  if (error) return res.status(500).json({ hata: error.message });
-
-  const isletmeler = (data || []).map(r => r.isletmeler).filter(Boolean);
-  res.json(isletmeler);
+    res.json(rows || []);
+  } catch (err) {
+    return res.status(500).json({ hata: err.message });
+  }
 });
 
 // GET /api/profil/stats — Kullanıcının sayım/ürün/depo istatistikleri
 router.get('/stats', async (req, res) => {
   try {
     // Kullanıcının bağlı işletmelerini bul
-    const { data: kis } = await supabaseAdmin
-      .from('kullanici_isletme')
-      .select('isletme_id')
-      .eq('kullanici_id', req.user.id)
-      .eq('aktif', true);
+    const [kis] = await pool.execute(
+      'SELECT isletme_id FROM kullanici_isletme WHERE kullanici_id = ? AND aktif = 1',
+      [req.user.id]
+    );
 
     const isletmeIds = (kis || []).map(k => k.isletme_id);
 
     // Sayımlar: kullanıcının kendi sayımları
-    const { count: sayimCount } = await supabaseAdmin
-      .from('sayimlar')
-      .select('id', { count: 'exact', head: true })
-      .eq('kullanici_id', req.user.id)
-      .neq('durum', 'silindi');
+    const [[{ sayimCount }]] = await pool.execute(
+      "SELECT COUNT(*) AS sayimCount FROM sayimlar WHERE kullanici_id = ? AND durum <> 'silindi'",
+      [req.user.id]
+    );
 
     let urunCount = 0;
     let depoCount = 0;
 
     if (isletmeIds.length > 0) {
-      const [{ count: uc }, { count: dc }] = await Promise.all([
-        supabaseAdmin
-          .from('isletme_urunler')
-          .select('id', { count: 'exact', head: true })
-          .in('isletme_id', isletmeIds)
-          .eq('aktif', true),
-        supabaseAdmin
-          .from('depolar')
-          .select('id', { count: 'exact', head: true })
-          .in('isletme_id', isletmeIds)
-          .eq('aktif', true),
+      const placeholders = isletmeIds.map(() => '?').join(',');
+
+      const [[{ uc }], [{ dc }]] = await Promise.all([
+        pool.execute(
+          `SELECT COUNT(*) AS uc FROM isletme_urunler WHERE isletme_id IN (${placeholders}) AND aktif = 1`,
+          isletmeIds
+        ).then(r => r[0]),
+        pool.execute(
+          `SELECT COUNT(*) AS dc FROM depolar WHERE isletme_id IN (${placeholders}) AND aktif = 1`,
+          isletmeIds
+        ).then(r => r[0]),
       ]);
       urunCount = uc || 0;
       depoCount = dc || 0;
     }
 
     res.json({ sayimlar: sayimCount || 0, urunler: urunCount, depolar: depoCount });
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
+// PUT /api/profil/ayarlar — kullanıcı ayarlarını güncelle
+router.put('/ayarlar', async (req, res) => {
+  const { ayarlar } = req.body;
+  if (!ayarlar) return res.status(400).json({ hata: 'Ayarlar zorunludur.' });
+
+  try {
+    await pool.execute(
+      'UPDATE kullanicilar SET ayarlar = ? WHERE id = ?',
+      [JSON.stringify(ayarlar), req.user.id]
+    );
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ hata: err.message });
   }

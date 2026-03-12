@@ -1,7 +1,26 @@
 const router = require('express').Router();
-const { supabaseAdmin } = require('../lib/supabase');
+const crypto = require('crypto');
+const { pool } = require('../lib/db');
 const authGuard = require('../middleware/authGuard');
 const yetkiGuard = require('../middleware/yetkiGuard');
+
+/* ── Yetki kontrol yardımcısı ── */
+async function checkSayimYetki(sayim, req, res, islem) {
+  if (req.user.rol === 'admin') return true;
+  if (sayim.kullanici_id !== req.user.id) {
+    res.status(403).json({ hata: 'Bu sayıma erişim yetkiniz yok.' });
+    return false;
+  }
+  const [rows] = await pool.execute(
+    'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
+    [req.user.id, sayim.isletme_id]
+  );
+  if (!rows.length || !rows[0].yetkiler?.sayim?.[islem]) {
+    res.status(403).json({ hata: `Sayım ${islem} yetkiniz yok.` });
+    return false;
+  }
+  return true;
+}
 
 router.use(authGuard);
 
@@ -12,96 +31,144 @@ router.get('/', yetkiGuard('sayim', 'goruntule'), async (req, res) => {
   const lm = Math.min(200, Math.max(1, (v => Number.isNaN(v) ? 50 : v)(parseInt(limit))));
   const offset = (sp - 1) * lm;
 
-  let query = supabaseAdmin
-    .from('sayimlar')
-    .select(`
-      id, ad, tarih, durum, notlar, created_at, isletme_id, depo_id,
-      depolar ( id, ad ),
-      isletmeler ( id, ad ),
-      kullanicilar ( id, ad_soyad )
-    `, { count: 'exact' })
-    .order('created_at', { ascending: false })
-    .range(offset, offset + lm - 1);
+  const where = [];
+  const params = [];
 
-  if (isletme_id)  query = query.eq('isletme_id', isletme_id);
-  if (isletme_ids) query = query.in('isletme_id', isletme_ids.split(',').filter(Boolean));
-  if (depo_id)     query = query.eq('depo_id', depo_id);
-  if (durum)       query = query.eq('durum', durum);
-  if (q)           query = query.ilike('ad', `%${q}%`);
+  if (isletme_id) { where.push('s.isletme_id = ?'); params.push(isletme_id); }
+  if (isletme_ids) {
+    const ids = isletme_ids.split(',').filter(Boolean);
+    if (ids.length) { where.push(`s.isletme_id IN (${ids.map(() => '?').join(',')})`); params.push(...ids); }
+  }
+  if (depo_id) { where.push('s.depo_id = ?'); params.push(depo_id); }
+  if (durum) { where.push('s.durum = ?'); params.push(durum); }
+  if (q) { where.push('s.ad LIKE ?'); params.push(`%${q}%`); }
 
   // Normal kullanıcı sadece kendi sayımlarını görür ve isletme_id zorunlu
   if (req.user.rol !== 'admin') {
     if (!isletme_id) return res.status(400).json({ hata: 'isletme_id zorunludur.' });
-    query = query.eq('kullanici_id', req.user.id);
+    where.push('s.kullanici_id = ?');
+    params.push(req.user.id);
   }
 
-  const { data, count, error } = await query;
-  if (error) return res.status(500).json({ hata: error.message });
+  const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
 
-  res.json({ data: data || [], toplam: count || 0 });
+  const [[{ toplam }]] = await pool.execute(
+    `SELECT COUNT(*) AS toplam FROM sayimlar s ${whereClause}`,
+    params
+  );
+
+  const [data] = await pool.execute(
+    `SELECT s.id, s.ad, s.tarih, s.durum, s.notlar, s.created_at, s.isletme_id, s.depo_id,
+       d.id AS depo_id_j, d.ad AS depo_ad,
+       i.id AS isletme_id_j, i.ad AS isletme_ad,
+       k.id AS kullanici_id_j, k.ad_soyad AS kullanici_ad_soyad
+     FROM sayimlar s
+     LEFT JOIN depolar d ON d.id = s.depo_id
+     LEFT JOIN isletmeler i ON i.id = s.isletme_id
+     LEFT JOIN kullanicilar k ON k.id = s.kullanici_id
+     ${whereClause}
+     ORDER BY s.created_at DESC
+     LIMIT ${lm} OFFSET ${offset}`,
+    params
+  );
+
+  const enriched = data.map(row => ({
+    id: row.id, ad: row.ad, tarih: row.tarih, durum: row.durum,
+    notlar: row.notlar, created_at: row.created_at,
+    isletme_id: row.isletme_id, depo_id: row.depo_id,
+    depolar: { id: row.depo_id_j, ad: row.depo_ad },
+    isletmeler: { id: row.isletme_id_j, ad: row.isletme_ad },
+    kullanicilar: { id: row.kullanici_id_j, ad_soyad: row.kullanici_ad_soyad },
+  }));
+
+  res.json({ data: enriched, toplam: toplam || 0 });
 });
 
 // GET /api/sayimlar/:id
 router.get('/:id', async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('sayimlar')
-    .select(`
-      *,
-      depolar ( id, ad, kod ),
-      kullanicilar ( id, ad_soyad ),
-      isletmeler ( id, ad, aktif ),
-      sayim_kalemleri (
-        id, miktar, birim, notlar, created_at,
-        isletme_urunler ( id, urun_kodu, urun_adi, isim_2, barkodlar, birim )
-      )
-    `)
-    .eq('id', req.params.id)
-    .single();
+  // 1. Sayım bilgisi + JOINler
+  const [sayimRows] = await pool.execute(
+    `SELECT s.*,
+       d.id AS depo_id_j, d.ad AS depo_ad, d.kod AS depo_kod,
+       k.id AS kullanici_id_j, k.ad_soyad AS kullanici_ad_soyad,
+       i.id AS isletme_id_j, i.ad AS isletme_ad, i.aktif AS isletme_aktif
+     FROM sayimlar s
+     LEFT JOIN depolar d ON d.id = s.depo_id
+     LEFT JOIN kullanicilar k ON k.id = s.kullanici_id
+     LEFT JOIN isletmeler i ON i.id = s.isletme_id
+     WHERE s.id = ?`,
+    [req.params.id]
+  );
 
-  if (error) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+
+  const sayim = sayimRows[0];
 
   // Kullanıcı sadece kendi sayımını görebilir + sayim.goruntule yetkisi
   if (req.user.rol !== 'admin') {
-    if (data.kullanici_id !== req.user.id) {
+    if (sayim.kullanici_id !== req.user.id) {
       return res.status(403).json({ hata: 'Bu sayıma erişim yetkiniz yok.' });
     }
-    const { data: ki } = await supabaseAdmin
-      .from('kullanici_isletme')
-      .select('yetkiler')
-      .eq('kullanici_id', req.user.id)
-      .eq('isletme_id', data.isletme_id)
-      .eq('aktif', true)
-      .single();
-    if (!ki?.yetkiler?.sayim?.goruntule) {
+    const [kiRows] = await pool.execute(
+      'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
+      [req.user.id, sayim.isletme_id]
+    );
+    if (!kiRows.length || !kiRows[0].yetkiler?.sayim?.goruntule) {
       return res.status(403).json({ hata: 'Sayım görüntüleme yetkiniz yok.' });
     }
   }
 
-  res.json(data);
+  // 2. Kalemler
+  const [kalemler] = await pool.execute(
+    `SELECT sk.id, sk.miktar, sk.birim, sk.notlar, sk.created_at,
+       u.id AS urun_id, u.urun_kodu, u.urun_adi, u.isim_2, u.barkodlar, u.birim AS urun_birim
+     FROM sayim_kalemleri sk
+     LEFT JOIN isletme_urunler u ON u.id = sk.urun_id
+     WHERE sk.sayim_id = ?
+     ORDER BY sk.created_at`,
+    [req.params.id]
+  );
+
+  // 3. Birleştir
+  const result = {
+    id: sayim.id, ad: sayim.ad, tarih: sayim.tarih, durum: sayim.durum,
+    notlar: sayim.notlar, kisiler: sayim.kisiler,
+    isletme_id: sayim.isletme_id, depo_id: sayim.depo_id, kullanici_id: sayim.kullanici_id,
+    created_at: sayim.created_at, updated_at: sayim.updated_at,
+    depolar: { id: sayim.depo_id_j, ad: sayim.depo_ad, kod: sayim.depo_kod },
+    kullanicilar: { id: sayim.kullanici_id_j, ad_soyad: sayim.kullanici_ad_soyad },
+    isletmeler: { id: sayim.isletme_id_j, ad: sayim.isletme_ad, aktif: sayim.isletme_aktif },
+    sayim_kalemleri: kalemler.map(k => ({
+      id: k.id, miktar: k.miktar, birim: k.birim, notlar: k.notlar, created_at: k.created_at,
+      isletme_urunler: k.urun_id ? {
+        id: k.urun_id, urun_kodu: k.urun_kodu, urun_adi: k.urun_adi,
+        isim_2: k.isim_2, barkodlar: k.barkodlar, birim: k.urun_birim,
+      } : null,
+    })),
+  };
+
+  res.json(result);
 });
 
 // DELETE /api/sayimlar/:id (durum = 'silindi')
 router.delete('/:id', async (req, res) => {
-  const { data: sayim } = await supabaseAdmin
-    .from('sayimlar')
-    .select('kullanici_id, durum, isletme_id')
-    .eq('id', req.params.id)
-    .single();
+  const [sayimRows] = await pool.execute(
+    'SELECT kullanici_id, durum, isletme_id FROM sayimlar WHERE id = ?',
+    [req.params.id]
+  );
 
-  if (!sayim) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  const sayim = sayimRows[0];
 
   if (req.user.rol !== 'admin') {
     if (sayim.kullanici_id !== req.user.id) {
       return res.status(403).json({ hata: 'Bu sayımı silme yetkiniz yok.' });
     }
-    const { data: ki } = await supabaseAdmin
-      .from('kullanici_isletme')
-      .select('yetkiler')
-      .eq('kullanici_id', req.user.id)
-      .eq('isletme_id', sayim.isletme_id)
-      .eq('aktif', true)
-      .single();
-    if (!ki?.yetkiler?.sayim?.sil) {
+    const [kiRows] = await pool.execute(
+      'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
+      [req.user.id, sayim.isletme_id]
+    );
+    if (!kiRows.length || !kiRows[0].yetkiler?.sayim?.sil) {
       return res.status(403).json({ hata: 'Sayım silme yetkiniz yok.' });
     }
   }
@@ -110,7 +177,7 @@ router.delete('/:id', async (req, res) => {
     return res.status(400).json({ hata: 'Tamamlanmış sayım silinemez.' });
   }
 
-  await supabaseAdmin.from('sayimlar').update({ durum: 'silindi' }).eq('id', req.params.id);
+  await pool.execute("UPDATE sayimlar SET durum = 'silindi' WHERE id = ?", [req.params.id]);
   res.json({ mesaj: 'Sayım silindi.' });
 });
 
@@ -122,34 +189,31 @@ router.post('/', yetkiGuard('sayim', 'ekle', 'body'), async (req, res) => {
     return res.status(400).json({ hata: 'isletme_id, depo_id ve ad zorunludur.' });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('sayimlar')
-    .insert({
-      isletme_id,
-      depo_id,
-      kullanici_id: req.user.id,
-      ad,
-      tarih: tarih || new Date().toISOString().split('T')[0],
-      notlar
-    })
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ hata: error.message });
-  res.status(201).json(data);
+  const id = crypto.randomUUID();
+  try {
+    await pool.execute(
+      `INSERT INTO sayimlar (id, isletme_id, depo_id, kullanici_id, ad, tarih, notlar)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, isletme_id, depo_id, req.user.id, ad, tarih || new Date().toISOString().split('T')[0], notlar || null]
+    );
+    const [rows] = await pool.execute('SELECT * FROM sayimlar WHERE id = ?', [id]);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    return res.status(500).json({ hata: err.message });
+  }
 });
 
 // PUT /api/sayimlar/:id  — sayim.duzenle yetkisi gerekli (depo, kişiler güncelle)
 router.put('/:id', async (req, res) => {
   const { depo_id, ad, kisiler } = req.body;
 
-  const { data: sayim } = await supabaseAdmin
-    .from('sayimlar')
-    .select('kullanici_id, isletme_id, durum')
-    .eq('id', req.params.id)
-    .single();
+  const [sayimRows] = await pool.execute(
+    'SELECT kullanici_id, isletme_id, durum FROM sayimlar WHERE id = ?',
+    [req.params.id]
+  );
 
-  if (!sayim) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  const sayim = sayimRows[0];
 
   // Sadece sahiplik kontrolü — yetki gerektirmez
   if (req.user.rol !== 'admin') {
@@ -158,50 +222,46 @@ router.put('/:id', async (req, res) => {
 
   if (sayim.durum !== 'devam') return res.status(400).json({ hata: 'Tamamlanmış sayım düzenlenemez.' });
 
-  const guncelle = {};
-  if (depo_id !== undefined) guncelle.depo_id = depo_id;
-  if (ad      !== undefined) guncelle.ad      = ad;
-  if (kisiler !== undefined) guncelle.kisiler  = kisiler;
+  const fields = [];
+  const params = [];
+  if (depo_id !== undefined) { fields.push('depo_id = ?'); params.push(depo_id); }
+  if (ad !== undefined) { fields.push('ad = ?'); params.push(ad); }
+  if (kisiler !== undefined) { fields.push('kisiler = ?'); params.push(JSON.stringify(kisiler)); }
 
-  const { data, error } = await supabaseAdmin
-    .from('sayimlar')
-    .update(guncelle)
-    .eq('id', req.params.id)
-    .select()
-    .single();
+  if (!fields.length) {
+    const [rows] = await pool.execute('SELECT * FROM sayimlar WHERE id = ?', [req.params.id]);
+    return res.json(rows[0]);
+  }
 
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json(data);
+  params.push(req.params.id);
+  try {
+    await pool.execute(`UPDATE sayimlar SET ${fields.join(', ')} WHERE id = ?`, params);
+    const [rows] = await pool.execute('SELECT * FROM sayimlar WHERE id = ?', [req.params.id]);
+    res.json(rows[0]);
+  } catch (err) {
+    return res.status(500).json({ hata: err.message });
+  }
 });
 
 // PUT /api/sayimlar/:id/tamamla
 router.put('/:id/tamamla', async (req, res) => {
-  const { data: sayim } = await supabaseAdmin
-    .from('sayimlar')
-    .select('kullanici_id, durum, isletme_id')
-    .eq('id', req.params.id)
-    .single();
+  const [sayimRows] = await pool.execute(
+    'SELECT kullanici_id, durum, isletme_id FROM sayimlar WHERE id = ?',
+    [req.params.id]
+  );
 
-  if (!sayim) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
-  if (req.user.rol !== 'admin') {
-    if (sayim.kullanici_id !== req.user.id) return res.status(403).json({ hata: 'Yetki yok.' });
-    const { data: ki } = await supabaseAdmin.from('kullanici_isletme').select('yetkiler')
-      .eq('kullanici_id', req.user.id).eq('isletme_id', sayim.isletme_id).eq('aktif', true).single();
-    if (!ki?.yetkiler?.sayim?.duzenle) return res.status(403).json({ hata: 'Sayım düzenleme yetkiniz yok.' });
-  }
+  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  const sayim = sayimRows[0];
+
+  if (!await checkSayimYetki(sayim, req, res, 'duzenle')) return;
+
   if (sayim.durum !== 'devam') {
     return res.status(400).json({ hata: 'Sadece devam eden sayımlar tamamlanabilir.' });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('sayimlar')
-    .update({ durum: 'tamamlandi' })
-    .eq('id', req.params.id)
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json(data);
+  await pool.execute("UPDATE sayimlar SET durum = 'tamamlandi' WHERE id = ?", [req.params.id]);
+  const [rows] = await pool.execute('SELECT * FROM sayimlar WHERE id = ?', [req.params.id]);
+  res.json(rows[0]);
 });
 
 // PUT /api/sayimlar/:id/yeniden-ac  (sadece admin)
@@ -210,64 +270,52 @@ router.put('/:id/yeniden-ac', async (req, res) => {
     return res.status(403).json({ hata: 'Sayımı yeniden açma yetkisi yalnızca adminlere aittir.' });
   }
 
-  const { data: sayim } = await supabaseAdmin
-    .from('sayimlar')
-    .select('durum')
-    .eq('id', req.params.id)
-    .single();
+  const [sayimRows] = await pool.execute(
+    'SELECT durum FROM sayimlar WHERE id = ?',
+    [req.params.id]
+  );
 
-  if (!sayim) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
-  if (sayim.durum === 'devam') return res.status(400).json({ hata: 'Sayım zaten açık durumda.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  if (sayimRows[0].durum === 'devam') return res.status(400).json({ hata: 'Sayım zaten açık durumda.' });
 
-  const { data, error } = await supabaseAdmin
-    .from('sayimlar')
-    .update({ durum: 'devam' })
-    .eq('id', req.params.id)
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json(data);
+  await pool.execute("UPDATE sayimlar SET durum = 'devam' WHERE id = ?", [req.params.id]);
+  const [rows] = await pool.execute('SELECT * FROM sayimlar WHERE id = ?', [req.params.id]);
+  res.json(rows[0]);
 });
 
 // GET /api/sayimlar/:id/kalemler
 router.get('/:id/kalemler', async (req, res) => {
   // Sayımın var olduğunu doğrula
-  const { data: sayim } = await supabaseAdmin
-    .from('sayimlar')
-    .select('kullanici_id, isletme_id')
-    .eq('id', req.params.id)
-    .single();
+  const [sayimRows] = await pool.execute(
+    'SELECT kullanici_id, isletme_id FROM sayimlar WHERE id = ?',
+    [req.params.id]
+  );
 
-  if (!sayim) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  const sayim = sayimRows[0];
 
-  if (req.user.rol !== 'admin') {
-    if (sayim.kullanici_id !== req.user.id) {
-      return res.status(403).json({ hata: 'Bu sayıma erişim yetkiniz yok.' });
-    }
-    const { data: ki } = await supabaseAdmin
-      .from('kullanici_isletme')
-      .select('yetkiler')
-      .eq('kullanici_id', req.user.id)
-      .eq('isletme_id', sayim.isletme_id)
-      .eq('aktif', true)
-      .single();
-    if (!ki?.yetkiler?.sayim?.goruntule) {
-      return res.status(403).json({ hata: 'Sayım görüntüleme yetkiniz yok.' });
-    }
-  }
+  if (!await checkSayimYetki(sayim, req, res, 'goruntule')) return;
 
-  const { data, error } = await supabaseAdmin
-    .from('sayim_kalemleri')
-    .select(`
-      *,
-      isletme_urunler ( id, urun_kodu, urun_adi, isim_2, barkodlar, birim )
-    `)
-    .eq('sayim_id', req.params.id)
-    .order('created_at');
+  const [data] = await pool.execute(
+    `SELECT sk.*,
+       u.id AS urun_id_j, u.urun_kodu, u.urun_adi, u.isim_2, u.barkodlar, u.birim AS urun_birim
+     FROM sayim_kalemleri sk
+     LEFT JOIN isletme_urunler u ON u.id = sk.urun_id
+     WHERE sk.sayim_id = ?
+     ORDER BY sk.created_at`,
+    [req.params.id]
+  );
 
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json(data);
+  const enriched = data.map(row => ({
+    id: row.id, sayim_id: row.sayim_id, urun_id: row.urun_id,
+    miktar: row.miktar, birim: row.birim, notlar: row.notlar, created_at: row.created_at,
+    isletme_urunler: row.urun_id_j ? {
+      id: row.urun_id_j, urun_kodu: row.urun_kodu, urun_adi: row.urun_adi,
+      isim_2: row.isim_2, barkodlar: row.barkodlar, birim: row.urun_birim,
+    } : null,
+  }));
+
+  res.json(enriched);
 });
 
 // POST /api/sayimlar/:id/kalem
@@ -279,42 +327,47 @@ router.post('/:id/kalem', async (req, res) => {
   }
 
   // Sayımın var olduğunu ve kullanıcının sahibi olduğunu doğrula
-  const { data: sayim } = await supabaseAdmin
-    .from('sayimlar')
-    .select('kullanici_id, isletme_id, durum')
-    .eq('id', req.params.id)
-    .single();
+  const [sayimRows] = await pool.execute(
+    'SELECT kullanici_id, isletme_id, durum FROM sayimlar WHERE id = ?',
+    [req.params.id]
+  );
 
-  if (!sayim) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  const sayim = sayimRows[0];
 
-  if (req.user.rol !== 'admin') {
-    if (sayim.kullanici_id !== req.user.id) {
-      return res.status(403).json({ hata: 'Bu sayıma erişim yetkiniz yok.' });
-    }
-    const { data: ki } = await supabaseAdmin
-      .from('kullanici_isletme')
-      .select('yetkiler')
-      .eq('kullanici_id', req.user.id)
-      .eq('isletme_id', sayim.isletme_id)
-      .eq('aktif', true)
-      .single();
-    if (!ki?.yetkiler?.sayim?.duzenle) {
-      return res.status(403).json({ hata: 'Sayım düzenleme yetkiniz yok.' });
-    }
-  }
+  if (!await checkSayimYetki(sayim, req, res, 'duzenle')) return;
 
   if (sayim.durum !== 'devam') {
     return res.status(400).json({ hata: 'Tamamlanmış sayıma kalem eklenemez.' });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('sayim_kalemleri')
-    .insert({ sayim_id: req.params.id, urun_id, miktar, birim, notlar })
-    .select(`*, isletme_urunler ( id, urun_kodu, urun_adi )`)
-    .single();
+  const id = crypto.randomUUID();
+  try {
+    await pool.execute(
+      'INSERT INTO sayim_kalemleri (id, sayim_id, urun_id, miktar, birim, notlar) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, req.params.id, urun_id, miktar, birim || null, notlar || null]
+    );
 
-  if (error) return res.status(500).json({ hata: error.message });
-  res.status(201).json(data);
+    // Kalem + ürün bilgisi ile dön
+    const [rows] = await pool.execute(
+      `SELECT sk.*, u.id AS urun_id_j, u.urun_kodu, u.urun_adi
+       FROM sayim_kalemleri sk
+       LEFT JOIN isletme_urunler u ON u.id = sk.urun_id
+       WHERE sk.id = ?`,
+      [id]
+    );
+
+    const row = rows[0];
+    res.status(201).json({
+      id: row.id, sayim_id: row.sayim_id, urun_id: row.urun_id,
+      miktar: row.miktar, birim: row.birim, notlar: row.notlar, created_at: row.created_at,
+      isletme_urunler: row.urun_id_j ? {
+        id: row.urun_id_j, urun_kodu: row.urun_kodu, urun_adi: row.urun_adi,
+      } : null,
+    });
+  } catch (err) {
+    return res.status(500).json({ hata: err.message });
+  }
 });
 
 // PUT /api/sayimlar/:id/kalem/:kalem_id  — sayim.duzenle yetkisi gerekli
@@ -323,55 +376,55 @@ router.put('/:id/kalem/:kalem_id', async (req, res) => {
 
   // Yetkiyi kontrol et
   if (req.user.rol !== 'admin') {
-    const { data: sayim } = await supabaseAdmin
-      .from('sayimlar')
-      .select('kullanici_id, isletme_id, durum')
-      .eq('id', req.params.id)
-      .single();
-    if (!sayim) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+    const [sayimRows] = await pool.execute(
+      'SELECT kullanici_id, isletme_id, durum FROM sayimlar WHERE id = ?',
+      [req.params.id]
+    );
+    if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+    const sayim = sayimRows[0];
     if (sayim.kullanici_id !== req.user.id) return res.status(403).json({ hata: 'Bu sayıma erişim yetkiniz yok.' });
-    const { data: ki } = await supabaseAdmin.from('kullanici_isletme').select('yetkiler')
-      .eq('kullanici_id', req.user.id).eq('isletme_id', sayim.isletme_id).eq('aktif', true).single();
-    if (!ki?.yetkiler?.sayim?.duzenle) return res.status(403).json({ hata: 'Sayım düzenleme yetkiniz yok.' });
+    const [kiRows] = await pool.execute(
+      'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
+      [req.user.id, sayim.isletme_id]
+    );
+    if (!kiRows.length || !kiRows[0].yetkiler?.sayim?.duzenle) return res.status(403).json({ hata: 'Sayım düzenleme yetkiniz yok.' });
     if (sayim.durum !== 'devam') return res.status(400).json({ hata: 'Tamamlanmış sayım düzenlenemez.' });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('sayim_kalemleri')
-    .update({ miktar, birim, notlar })
-    .eq('id', req.params.kalem_id)
-    .eq('sayim_id', req.params.id)
-    .select()
-    .single();
+  await pool.execute(
+    'UPDATE sayim_kalemleri SET miktar = ?, birim = ?, notlar = ? WHERE id = ? AND sayim_id = ?',
+    [miktar, birim, notlar, req.params.kalem_id, req.params.id]
+  );
 
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json(data);
+  const [rows] = await pool.execute('SELECT * FROM sayim_kalemleri WHERE id = ? AND sayim_id = ?', [req.params.kalem_id, req.params.id]);
+  if (!rows.length) return res.status(404).json({ hata: 'Kalem bulunamadı.' });
+  res.json(rows[0]);
 });
 
 // DELETE /api/sayimlar/:id/kalem/:kalem_id  — sayim.duzenle yetkisi gerekli
 router.delete('/:id/kalem/:kalem_id', async (req, res) => {
   // Yetkiyi kontrol et
   if (req.user.rol !== 'admin') {
-    const { data: sayim } = await supabaseAdmin
-      .from('sayimlar')
-      .select('kullanici_id, isletme_id, durum')
-      .eq('id', req.params.id)
-      .single();
-    if (!sayim) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+    const [sayimRows] = await pool.execute(
+      'SELECT kullanici_id, isletme_id, durum FROM sayimlar WHERE id = ?',
+      [req.params.id]
+    );
+    if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+    const sayim = sayimRows[0];
     if (sayim.kullanici_id !== req.user.id) return res.status(403).json({ hata: 'Bu sayıma erişim yetkiniz yok.' });
-    const { data: ki } = await supabaseAdmin.from('kullanici_isletme').select('yetkiler')
-      .eq('kullanici_id', req.user.id).eq('isletme_id', sayim.isletme_id).eq('aktif', true).single();
-    if (!ki?.yetkiler?.sayim?.duzenle) return res.status(403).json({ hata: 'Sayım düzenleme yetkiniz yok.' });
+    const [kiRows] = await pool.execute(
+      'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
+      [req.user.id, sayim.isletme_id]
+    );
+    if (!kiRows.length || !kiRows[0].yetkiler?.sayim?.duzenle) return res.status(403).json({ hata: 'Sayım düzenleme yetkiniz yok.' });
     if (sayim.durum !== 'devam') return res.status(400).json({ hata: 'Tamamlanmış sayımdan kalem silinemez.' });
   }
 
-  const { error } = await supabaseAdmin
-    .from('sayim_kalemleri')
-    .delete()
-    .eq('id', req.params.kalem_id)
-    .eq('sayim_id', req.params.id);
+  await pool.execute(
+    'DELETE FROM sayim_kalemleri WHERE id = ? AND sayim_id = ?',
+    [req.params.kalem_id, req.params.id]
+  );
 
-  if (error) return res.status(500).json({ hata: error.message });
   res.json({ mesaj: 'Kalem silindi.' });
 });
 

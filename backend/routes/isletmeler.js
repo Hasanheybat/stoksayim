@@ -1,5 +1,6 @@
 const router = require('express').Router();
-const { supabaseAdmin } = require('../lib/supabase');
+const crypto = require('crypto');
+const { pool } = require('../lib/db');
 const authGuard = require('../middleware/authGuard');
 const adminGuard = require('../middleware/adminGuard');
 
@@ -10,38 +11,68 @@ router.use(authGuard, adminGuard);
 router.get('/', async (req, res) => {
   const { aktif, q, sayfa, limit = 50 } = req.query;
 
-  let query = supabaseAdmin
-    .from('isletmeler')
-    .select('*', { count: 'exact' })
-    .order('ad');
+  try {
+    const conditions = [];
+    const params = [];
 
-  if (aktif !== undefined) query = query.eq('aktif', aktif === 'true');
-  if (q) query = query.or(`ad.ilike.%${q}%,kod.ilike.%${q}%`);
+    if (aktif !== undefined) {
+      conditions.push('aktif = ?');
+      params.push(aktif === 'true' ? 1 : 0);
+    }
 
-  if (sayfa) {
-    const sp = Math.max(1, (v => Number.isNaN(v) ? 1 : v)(parseInt(sayfa)));
-    const lm = Math.min(200, Math.max(1, (v => Number.isNaN(v) ? 50 : v)(parseInt(limit))));
-    const offset = (sp - 1) * lm;
-    query = query.range(offset, offset + lm - 1);
+    if (q) {
+      conditions.push('(ad LIKE ? OR kod LIKE ?)');
+      params.push(`%${q}%`, `%${q}%`);
+    }
+
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    if (sayfa) {
+      const sp = Math.max(1, (v => Number.isNaN(v) ? 1 : v)(parseInt(sayfa)));
+      const lm = Math.min(200, Math.max(1, (v => Number.isNaN(v) ? 50 : v)(parseInt(limit))));
+      const offset = (sp - 1) * lm;
+
+      const [countRows] = await pool.execute(
+        `SELECT COUNT(*) as toplam FROM isletmeler ${where}`,
+        params
+      );
+
+      const [data] = await pool.execute(
+        `SELECT * FROM isletmeler ${where} ORDER BY ad LIMIT ${lm} OFFSET ${offset}`,
+        params
+      );
+
+      return res.json({ data, toplam: countRows[0].toplam });
+    }
+
+    // backward compat — dropdown listeler için
+    const [data] = await pool.execute(
+      `SELECT * FROM isletmeler ${where} ORDER BY ad`,
+      params
+    );
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
   }
-
-  const { data, count, error } = await query;
-  if (error) return res.status(500).json({ hata: error.message });
-
-  if (sayfa) return res.json({ data, toplam: count });
-  res.json(data); // backward compat — dropdown listeler için
 });
 
 // GET /api/isletmeler/:id
 router.get('/:id', async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('isletmeler')
-    .select('*')
-    .eq('id', req.params.id)
-    .single();
+  try {
+    const [rows] = await pool.execute(
+      'SELECT * FROM isletmeler WHERE id = ?',
+      [req.params.id]
+    );
 
-  if (error) return res.status(404).json({ hata: 'İşletme bulunamadı.' });
-  res.json(data);
+    if (!rows.length) {
+      return res.status(404).json({ hata: 'İşletme bulunamadı.' });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
 });
 
 // POST /api/isletmeler
@@ -52,46 +83,80 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ hata: 'Ad ve kod zorunludur.' });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('isletmeler')
-    .insert({ ad, kod, adres, telefon })
-    .select()
-    .single();
+  try {
+    const id = crypto.randomUUID();
 
-  if (error) {
-    if (error.code === '23505') {
+    await pool.execute(
+      'INSERT INTO isletmeler (id, ad, kod, adres, telefon) VALUES (?, ?, ?, ?, ?)',
+      [id, ad, kod, adres || null, telefon || null]
+    );
+
+    const [rows] = await pool.execute(
+      'SELECT * FROM isletmeler WHERE id = ?',
+      [id]
+    );
+
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.errno === 1062) {
       return res.status(409).json({ hata: 'Bu kod zaten kullanımda.' });
     }
-    return res.status(500).json({ hata: error.message });
+    res.status(500).json({ hata: err.message });
   }
-
-  res.status(201).json(data);
 });
 
 // PUT /api/isletmeler/:id
 router.put('/:id', async (req, res) => {
   const { ad, kod, adres, telefon, aktif } = req.body;
 
-  const { data, error } = await supabaseAdmin
-    .from('isletmeler')
-    .update({ ad, kod, adres, telefon, aktif })
-    .eq('id', req.params.id)
-    .select()
-    .single();
+  try {
+    const fields = [];
+    const params = [];
 
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json(data);
+    if (ad !== undefined)      { fields.push('ad = ?');      params.push(ad); }
+    if (kod !== undefined)     { fields.push('kod = ?');     params.push(kod); }
+    if (adres !== undefined)   { fields.push('adres = ?');   params.push(adres); }
+    if (telefon !== undefined) { fields.push('telefon = ?'); params.push(telefon); }
+    if (aktif !== undefined)   { fields.push('aktif = ?');   params.push(aktif ? 1 : 0); }
+
+    if (!fields.length) {
+      return res.status(400).json({ hata: 'Güncellenecek alan yok.' });
+    }
+
+    params.push(req.params.id);
+
+    await pool.execute(
+      `UPDATE isletmeler SET ${fields.join(', ')} WHERE id = ?`,
+      params
+    );
+
+    const [rows] = await pool.execute(
+      'SELECT * FROM isletmeler WHERE id = ?',
+      [req.params.id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ hata: 'İşletme bulunamadı.' });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
 });
 
 // DELETE /api/isletmeler/:id — Soft delete (pasife al)
 router.delete('/:id', async (req, res) => {
-  const { error } = await supabaseAdmin
-    .from('isletmeler')
-    .update({ aktif: false })
-    .eq('id', req.params.id);
+  try {
+    await pool.execute(
+      'UPDATE isletmeler SET aktif = 0 WHERE id = ?',
+      [req.params.id]
+    );
 
-  if (error) return res.status(500).json({ hata: error.message });
-  res.json({ mesaj: 'İşletme pasife alındı.' });
+    res.json({ mesaj: 'İşletme pasife alındı.' });
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
 });
 
 module.exports = router;

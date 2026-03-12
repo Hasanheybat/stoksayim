@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Settings, Shield, Mail, Lock, Eye, EyeOff, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useAuthStoreAdm from '../../store/authStoreAdm';
-import { supabaseAdm } from '../../lib/supabaseAdm';
+import apiAdm from '../../lib/apiAdm';
 
 export default function AdminAyarlarPage() {
   const { kullanici } = useAuthStoreAdm();
@@ -20,12 +20,11 @@ export default function AdminAyarlarPage() {
     if (!email.trim()) return;
     setEmailY(true);
     try {
-      const { error } = await supabaseAdm.auth.updateUser({ email: email.trim() });
-      if (error) throw error;
-      toast.success('Onay e-postası gönderildi.');
+      await apiAdm.put('/auth/update-email', { email: email.trim() });
+      toast.success('E-posta güncellendi.');
       setEmail('');
     } catch (err) {
-      toast.error(err.message || 'E-posta güncellenemedi.');
+      toast.error(err.response?.data?.hata || 'E-posta güncellenemedi.');
     } finally {
       setEmailY(false);
     }
@@ -44,12 +43,11 @@ export default function AdminAyarlarPage() {
     }
     setSifreY(true);
     try {
-      const { error } = await supabaseAdm.auth.updateUser({ password: sifreGuncelle.yeni });
-      if (error) throw error;
+      await apiAdm.put('/auth/update-password', { eskiSifre: '', yeniSifre: sifreGuncelle.yeni });
       toast.success('Şifre güncellendi.');
       setSifreG({ yeni: '', tekrar: '' });
     } catch (err) {
-      toast.error(err.message || 'Şifre güncellenemedi.');
+      toast.error(err.response?.data?.hata || 'Şifre güncellenemedi.');
     } finally {
       setSifreY(false);
     }

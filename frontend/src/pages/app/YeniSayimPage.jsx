@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Warehouse, ChevronDown, X, Plus } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 import api from '../../lib/api';
 import useAuthStore from '../../store/authStore';
 import toast from 'react-hot-toast';
@@ -37,24 +36,20 @@ export default function YeniSayimPage() {
   useEffect(() => { if (kullanici?.id) fetchIsletmeler(); }, [kullanici?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchIsletmeler = async () => {
-    const { data } = await supabase
-      .from('kullanici_isletme')
-      .select('isletmeler(id, ad, kod, aktif)')
-      .eq('kullanici_id', kullanici.id)
-      .eq('aktif', true);
-    const list = (data || []).map(k => k.isletmeler).filter(i => i?.aktif === true);
-    setIsletmeler(list);
-    if (list.length === 1) handleIsletme(list[0].id);
+    try {
+      const { data } = await api.get('/isletmeler');
+      const list = Array.isArray(data) ? data : (data?.data || []);
+      setIsletmeler(list);
+      if (list.length === 1) handleIsletme(list[0].id);
+    } catch { /* sessiz hata */ }
   };
 
   const fetchDepolar = async (isletmeId) => {
-    const { data } = await supabase
-      .from('depolar')
-      .select('id, ad')
-      .eq('isletme_id', isletmeId)
-      .eq('aktif', true);
-    setDepolar(data || []);
-    setForm(f => ({ ...f, depo_id: '' }));
+    try {
+      const { data } = await api.get(`/depolar?isletme_id=${isletmeId}`);
+      setDepolar(Array.isArray(data) ? data : (data?.data || []));
+      setForm(f => ({ ...f, depo_id: '' }));
+    } catch { /* sessiz hata */ }
   };
 
   const handleIsletme = (id) => {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { LogOut, Zap, Volume2, Shield } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import api from '../../lib/api';
 import useAuthStore from '../../store/authStore';
 
 /* ── Native Toggle ── */
@@ -48,16 +48,13 @@ export default function AyarlarPage() {
   const handleToggle = async (key) => {
     const yeni = { ...ayarlar, [key]: !ayarlar[key] };
     setAyarlar(yeni);
-    const { error } = await supabase
-      .from('kullanicilar')
-      .update({ ayarlar: yeni })
-      .eq('id', kullanici?.id);
-    if (error) {
-      setAyarlar(ayarlar);
-      toast.error('Ayar kaydedilemedi.');
-    } else {
+    try {
+      await api.put('/profil/ayarlar', { ayarlar: yeni });
       setKullanici({ ...kullanici, ayarlar: yeni });
       toast.success('Ayar kaydedildi.');
+    } catch {
+      setAyarlar(ayarlar);
+      toast.error('Ayar kaydedilemedi.');
     }
   };
 

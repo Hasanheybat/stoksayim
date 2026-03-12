@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Camera, ChevronDown, Plus, RotateCcw, Building2 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import api from '../../lib/api';
 import toast from 'react-hot-toast';
 
 const P  = '#6c53f5';
 const PL = 'rgba(108,83,245,0.10)';
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 const BIRIMLER = ['ADET','KG','GR','LT','ML','KOLİ','PAKET','KUTU','ÇUVAL','METRE','RULO','TON'];
 
@@ -199,40 +198,20 @@ export default function StokEkle({ isletmeler = [], isletmeId, onKapat, onKayded
 
     setKaydediyor(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        toast.error('Oturum bulunamadı. Tekrar giriş yapın.');
-        return;
-      }
-
-      const res = await fetch(`${API}/api/urunler`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          isletme_id: seciliIsletmeId,
-          urun_adi:   form.urun_adi.trim(),
-          isim_2:     form.isim_2.trim(),
-          urun_kodu:  form.urun_kodu.trim(),
-          barkodlar:  form.barkodlar,
-          birim:      form.birim,
-        }),
+      const { data } = await api.post('/urunler', {
+        isletme_id: seciliIsletmeId,
+        urun_adi:   form.urun_adi.trim(),
+        isim_2:     form.isim_2.trim(),
+        urun_kodu:  form.urun_kodu.trim(),
+        barkodlar:  form.barkodlar,
+        birim:      form.birim,
       });
 
-      const json = await res.json();
-
-      if (!res.ok) {
-        toast.error(json.hata || 'Kaydedilemedi.');
-        return;
-      }
-
       toast.success('Stok eklendi!');
-      onKaydedildi?.(json);
+      onKaydedildi?.(data);
       onKapat();
-    } catch (e) {
-      toast.error('Sunucuya bağlanılamadı.');
+    } catch (err) {
+      toast.error(err.response?.data?.hata || 'Sunucuya bağlanılamadı.');
     } finally {
       setKaydediyor(false);
     }

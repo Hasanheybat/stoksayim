@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { X, Building2, ChevronDown, Save, RotateCcw } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import api from '../../lib/api';
 import toast from 'react-hot-toast';
 
 const P  = '#6c53f5';
 const PL = 'rgba(108,83,245,0.10)';
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 const GRADS = [
   'linear-gradient(135deg,#6c53f5,#8B5CF6)',
@@ -32,25 +31,13 @@ export default function DepoEkle({ isletmeler = [], isletmeId, onKapat, onKayded
 
     setKaydediyor(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) { toast.error('Oturum bulunamadı.'); return; }
-
-      const res = await fetch(`${API}/api/depolar`, {
-        method: 'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ isletme_id: seciliIsletmeId, ad: depoAdi.trim() }),
-      });
-      const json = await res.json();
-      if (!res.ok) { toast.error(json.hata || 'Kaydedilemedi.'); return; }
+      const { data } = await api.post('/depolar', { isletme_id: seciliIsletmeId, ad: depoAdi.trim() });
 
       toast.success('Depo eklendi!');
-      onKaydedildi?.(json);
+      onKaydedildi?.(data);
       onKapat();
-    } catch {
-      toast.error('Sunucuya bağlanılamadı.');
+    } catch (err) {
+      toast.error(err.response?.data?.hata || 'Sunucuya bağlanılamadı.');
     } finally {
       setKaydediyor(false);
     }
