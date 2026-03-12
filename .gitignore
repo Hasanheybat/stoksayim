@@ -1,0 +1,30 @@
+# Bağımlılıklar
+node_modules/
+
+# Ortam değişkenleri (hassas bilgiler)
+.env
+*.env.local
+
+# Build çıktısı
+dist/
+build/
+
+# OS dosyaları
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude AI oturum dosyaları
+.claude/
+
+# Log dosyaları
+*.log
+npm-debug.log*
+
+# Test çıktıları
+coverage/
