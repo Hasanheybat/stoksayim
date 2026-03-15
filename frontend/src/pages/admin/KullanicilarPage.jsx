@@ -7,8 +7,8 @@ import api from '../../lib/apiAdm';
 const FABRIKA_YETKILER = {
   urun:   { goruntule: true,  ekle: false, duzenle: false, sil: false },
   depo:   { goruntule: true,  ekle: false, duzenle: false, sil: false },
-  barkod: { tanimla: false,   duzenle: false, sil: false },
-  sayim:  { goruntule: true,  ekle: true,  duzenle: false, sil: false },
+  sayim:        { goruntule: true,  ekle: true,  duzenle: false, sil: false },
+  toplam_sayim: { goruntule: false, ekle: false, duzenle: false, sil: false },
 };
 
 const LS_KEY = 'stoksay_default_yetkiler_kullanici';
@@ -27,8 +27,8 @@ const DEFAULT_YETKILER = FABRIKA_YETKILER;
 const KATEGORILER = [
   { key: 'urun',   label: 'Ürünler', islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
   { key: 'depo',   label: 'Depolar', islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
-  { key: 'barkod', label: 'Barkod',  islemler: ['tanimla', 'duzenle', 'sil'] },
-  { key: 'sayim',  label: 'Sayım',   islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+  { key: 'sayim',        label: 'Sayım',          islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+  { key: 'toplam_sayim', label: 'Toplam Sayımlar', islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
 ];
 
 const ISLEM_LABELS = {
@@ -36,7 +36,6 @@ const ISLEM_LABELS = {
   ekle:      'Ekle',
   duzenle:   'Düzenle',
   sil:       'Sil',
-  tanimla:   'Tanımla',
 };
 
 /* ── Yetki Editörü Bileşeni ── */

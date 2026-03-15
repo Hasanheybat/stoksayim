@@ -1,9 +1,10 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express    = require('express');
 const cors       = require('cors');
 const helmet     = require('helmet');
 const rateLimit  = require('express-rate-limit');
 
+const path = require('path');
 const app = express();
 
 // Güvenlik başlıkları (XSS, clickjacking, MIME sniffing vb.)
@@ -55,6 +56,9 @@ app.use('/api/sayimlar',    require('./routes/sayimlar'));
 app.use('/api/profil',      require('./routes/profil'));
 app.use('/api/roller',      require('./routes/roller'));
 app.use('/api/stats',       require('./routes/stats'));
+
+// Flutter mobil web build — statik dosya servisi
+app.use('/mobile', express.static(path.join(__dirname, 'public/mobile')));
 
 // Health check
 app.get('/api/health', (req, res) => {

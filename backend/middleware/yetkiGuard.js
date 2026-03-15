@@ -2,8 +2,8 @@ const { pool } = require('../lib/db');
 
 /**
  * Yetki kontrolü middleware factory
- * @param {string} kategori - 'urun' | 'depo' | 'barkod' | 'sayim'
- * @param {string} islem    - 'goruntule' | 'ekle' | 'duzenle' | 'sil' | 'tanimla'
+ * @param {string} kategori - 'urun' | 'depo' | 'sayim' | 'toplam_sayim'
+ * @param {string} islem    - 'goruntule' | 'ekle' | 'duzenle' | 'sil'
  * @param {string} isletmeIdSource - req objesinden isletme_id'nin alınacağı yer
  *   'body' | 'params' | 'query' (default: 'query')
  */

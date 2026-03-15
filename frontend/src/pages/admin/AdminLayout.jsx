@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation, NavLink } from 'react-router-dom';
-import { LogOut, Bell, Settings, User, ChevronLeft, Building2, Warehouse, Users, Package, ShieldCheck, ClipboardList, BarChart3 } from 'lucide-react';
+import { LogOut, Bell, Settings, User, ChevronLeft, Building2, Warehouse, Users, Package, ShieldCheck, ClipboardList, Calculator } from 'lucide-react';
 import useAuthStoreAdm from '../../store/authStoreAdm';
 
 const GRAD = {
@@ -21,7 +21,7 @@ const NAV_LINKS = [
   { icon: Package,      grad: GRAD.amber,  label: 'Ürünler',     to: '/admin/urunler'     },
   { icon: ShieldCheck,  grad: GRAD.pink,   label: 'Roller',      to: '/admin/roller'      },
   { icon: ClipboardList,grad: GRAD.teal,   label: 'Sayımlar',    to: '/admin/sayimlar'    },
-  { icon: BarChart3,    grad: GRAD.purple, label: 'Raporlar',    to: '/admin/raporlar'    },
+  { icon: Calculator,   grad: GRAD.purple, label: 'Toplam Sayımlar', to: '/admin/toplanmis-sayimlar' },
   { icon: Settings,     grad: GRAD.gray,   label: 'Ayarlar',     to: '/admin/ayarlar'     },
 ];
 

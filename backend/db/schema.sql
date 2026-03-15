@@ -62,7 +62,6 @@ CREATE TABLE kullanici_isletme (
   yetkiler     JSONB NOT NULL DEFAULT '{
     "urun":   { "goruntule":true, "ekle":false, "duzenle":false, "sil":false },
     "depo":   { "goruntule":true, "ekle":false, "duzenle":false, "sil":false },
-    "barkod": { "tanimla":false,  "duzenle":false, "sil":false },
     "sayim":  { "goruntule":true, "ekle":true,  "duzenle":false, "sil":false }
   }',
   aktif       BOOLEAN     DEFAULT TRUE,

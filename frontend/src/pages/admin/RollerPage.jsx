@@ -9,24 +9,24 @@ import api from '../../lib/apiAdm';
 
 /* ── Yetki sabitleri ── */
 const FABRIKA_YETKILER = {
-  urun:   { goruntule: true,  ekle: false, duzenle: false, sil: false },
-  depo:   { goruntule: true,  ekle: false, duzenle: false, sil: false },
-  barkod: { tanimla: false,   duzenle: false, sil: false },
-  sayim:  { goruntule: true,  ekle: true,  duzenle: false, sil: false },
+  urun:         { goruntule: true,  ekle: false, duzenle: false, sil: false },
+  depo:         { goruntule: true,  ekle: false, duzenle: false, sil: false },
+  sayim:        { goruntule: true,  ekle: true,  duzenle: false, sil: false },
+  toplam_sayim: { goruntule: false, ekle: false, duzenle: false, sil: false },
 };
 
 const ADMIN_YETKILER = {
-  urun:   { goruntule: true, ekle: true, duzenle: true, sil: true },
-  depo:   { goruntule: true, ekle: true, duzenle: true, sil: true },
-  barkod: { tanimla: true,   duzenle: true, sil: true },
-  sayim:  { goruntule: true, ekle: true, duzenle: true, sil: true },
+  urun:         { goruntule: true, ekle: true, duzenle: true, sil: true },
+  depo:         { goruntule: true, ekle: true, duzenle: true, sil: true },
+  sayim:        { goruntule: true, ekle: true, duzenle: true, sil: true },
+  toplam_sayim: { goruntule: true, ekle: true, duzenle: true, sil: true },
 };
 
 const KATEGORILER = [
-  { key: 'urun',   label: 'Ürünler', islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
-  { key: 'depo',   label: 'Depolar', islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
-  { key: 'barkod', label: 'Barkod',  islemler: ['tanimla', 'duzenle', 'sil'] },
-  { key: 'sayim',  label: 'Sayım',   islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+  { key: 'urun',         label: 'Ürünler',         islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+  { key: 'depo',         label: 'Depolar',          islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+  { key: 'sayim',        label: 'Sayım',            islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+  { key: 'toplam_sayim', label: 'Toplam Sayımlar',  islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
 ];
 
 const ISLEM_LABELS = {
@@ -34,7 +34,6 @@ const ISLEM_LABELS = {
   ekle:      'Ekle',
   duzenle:   'Düzenle',
   sil:       'Sil',
-  tanimla:   'Tanımla',
 };
 
 /* ── Yetki özet sayısı ── */

@@ -265,10 +265,10 @@ router.post('/:id/isletme', async (req, res) => {
   }
 
   const varsayilanYetkiler = {
-    urun:   { goruntule: true, ekle: false, duzenle: false, sil: false },
-    depo:   { goruntule: true, ekle: false, duzenle: false, sil: false },
-    barkod: { tanimla: false, duzenle: false, sil: false },
-    sayim:  { goruntule: true, ekle: false, duzenle: false, sil: false },
+    urun:         { goruntule: true, ekle: false, duzenle: false, sil: false },
+    depo:         { goruntule: true, ekle: false, duzenle: false, sil: false },
+    sayim:        { goruntule: true, ekle: false, duzenle: false, sil: false },
+    toplam_sayim: { goruntule: false, ekle: false, duzenle: false, sil: false },
   };
 
   try {

@@ -1,5 +1,4 @@
 import { Navigate } from 'react-router-dom';
-import useAuthStore    from '../../store/authStore';
 import useAuthStoreAdm from '../../store/authStoreAdm';
 
 const Spinner = () => (
@@ -8,23 +7,11 @@ const Spinner = () => (
   </div>
 );
 
-export default function ProtectedRoute({ children, requireRole }) {
-  const isAdminRoute = requireRole === 'admin';
+export default function ProtectedRoute({ children }) {
+  const { kullanici, yukleniyor } = useAuthStoreAdm();
 
-  // Admin route → admin store (bağımsız oturum)
-  // App route   → app store   (bağımsız oturum)
-  const { kullanici: admKullanici, yukleniyor: admYukleniyor } = useAuthStoreAdm();
-  const { kullanici: appKullanici, yukleniyor: appYukleniyor } = useAuthStore();
-
-  if (isAdminRoute) {
-    if (admYukleniyor) return <Spinner />;
-    if (!admKullanici || admKullanici.aktif === false) return <Navigate to="/login" replace />;
-    if (admKullanici.rol !== 'admin') return <Navigate to="/app" replace />;
-    return children;
-  }
-
-  // App route
-  if (appYukleniyor) return <Spinner />;
-  if (!appKullanici || appKullanici.aktif === false) return <Navigate to="/app-login" replace />;
+  if (yukleniyor) return <Spinner />;
+  if (!kullanici || kullanici.aktif === false) return <Navigate to="/login" replace />;
+  if (kullanici.rol !== 'admin') return <Navigate to="/login" replace />;
   return children;
 }

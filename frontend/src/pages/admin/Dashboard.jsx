@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Warehouse, Users, Package, ShieldCheck,
-  ClipboardList, BarChart3, Settings, ChevronRight,
+  ClipboardList, Calculator, Settings, ChevronRight,
   CheckCircle2, Clock, TrendingUp,
 } from 'lucide-react';
 import api from '../../lib/apiAdm';
@@ -132,7 +132,7 @@ export default function AdminDashboard() {
     { icon: Package,      grad: GRAD.amber,  label: 'Ürünler',      to: '/admin/urunler',       count: stats?.urun      },
     { icon: ShieldCheck,  grad: GRAD.pink,   label: 'Roller',       to: '/admin/roller'                                 },
     { icon: ClipboardList,grad: GRAD.teal,   label: 'Sayımlar',     to: '/admin/sayimlar',      count: stats?.sayim     },
-    { icon: BarChart3,    grad: GRAD.purple, label: 'Raporlar',     to: '/admin/raporlar'                               },
+    { icon: Calculator,   grad: GRAD.purple, label: 'Toplam Sayımlar', to: '/admin/toplanmis-sayimlar'                    },
     { icon: Settings,     grad: GRAD.gray,   label: 'Ayarlar',      to: '/admin/ayarlar'                                },
   ];
 

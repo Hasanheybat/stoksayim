@@ -102,8 +102,8 @@ router.put('/:id', async (req, res) => {
 router.post('/', yetkiGuard('urun', 'ekle', 'body'), async (req, res) => {
   const { isletme_id, urun_kodu, urun_adi, isim_2, birim, barkodlar, kategori } = req.body;
 
-  if (!isletme_id || !urun_kodu?.trim() || !urun_adi?.trim()) {
-    return res.status(400).json({ hata: 'isletme_id, urun_kodu ve urun_adi zorunludur.' });
+  if (!isletme_id || !urun_adi?.trim()) {
+    return res.status(400).json({ hata: 'isletme_id ve urun_adi zorunludur.' });
   }
 
   const barkodStr = Array.isArray(barkodlar)
@@ -111,12 +111,13 @@ router.post('/', yetkiGuard('urun', 'ekle', 'body'), async (req, res) => {
     : (typeof barkodlar === 'string' ? barkodlar : '');
 
   const id = crypto.randomUUID();
+  const kod = urun_kodu?.trim() || `STK-${id.slice(0, 8)}`;
   try {
     await pool.execute(
       `INSERT INTO isletme_urunler
         (id, isletme_id, urun_kodu, urun_adi, isim_2, birim, barkodlar, kategori, guncelleme_kaynagi, guncelleyen_kullanici_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'kullanici', ?)`,
-      [id, isletme_id, urun_kodu.trim(), urun_adi.trim(), (isim_2 || '').trim(), birim || 'ADET', barkodStr, kategori || null, req.user.id]
+      [id, isletme_id, kod, urun_adi.trim(), (isim_2 || '').trim(), birim || 'ADET', barkodStr, kategori || null, req.user.id]
     );
     const [rows] = await pool.execute('SELECT * FROM isletme_urunler WHERE id = ?', [id]);
     res.status(201).json(rows[0]);
@@ -236,7 +237,7 @@ router.get('/sablon', (req, res) => {
 
 // GET /api/urunler?isletme_id=X&q=arama&sayfa=1  (isletme_id opsiyonel)
 router.get('/', async (req, res) => {
-  const { isletme_id, q, sayfa = 1, limit = 20 } = req.query;
+  const { isletme_id, q, alan, sayfa = 1, limit = 20 } = req.query;
 
   const sp = Math.max(1, (v => Number.isNaN(v) ? 1 : v)(parseInt(sayfa)));
   const lm = Math.min(200, Math.max(1, (v => Number.isNaN(v) ? 20 : v)(parseInt(limit))));
@@ -250,8 +251,13 @@ router.get('/', async (req, res) => {
     params.push(isletme_id);
   }
   if (q) {
-    where.push('(u.urun_adi LIKE ? OR u.urun_kodu LIKE ? OR u.barkodlar LIKE ? OR u.isim_2 LIKE ?)');
-    params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    if (alan === 'isim_2') {
+      where.push('u.isim_2 LIKE ?');
+      params.push(`%${q}%`);
+    } else {
+      where.push('(u.urun_adi LIKE ? OR u.urun_kodu LIKE ? OR u.barkodlar LIKE ? OR u.isim_2 LIKE ?)');
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    }
   }
 
   const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';

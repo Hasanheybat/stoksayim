@@ -131,7 +131,6 @@ async function seed() {
       JSON.stringify({
         urun:   { goruntule: true, ekle: true, duzenle: true, sil: false },
         depo:   { goruntule: true, ekle: false, duzenle: false, sil: false },
-        barkod: { tanimla: true, duzenle: false, sil: false },
         sayim:  { goruntule: true, ekle: true, duzenle: true, sil: false },
       }),
       true,

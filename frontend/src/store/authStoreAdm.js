@@ -22,9 +22,13 @@ const useAuthStoreAdm = create(
         try {
           const { data } = await apiAdm.get('/auth/me');
           set({ kullanici: data.kullanici, yukleniyor: false });
-        } catch {
-          localStorage.removeItem('stoksay-adm-token');
-          set({ kullanici: null, yukleniyor: false });
+        } catch (err) {
+          if (err.response && err.response.status === 401) {
+            localStorage.removeItem('stoksay-adm-token');
+            set({ kullanici: null, yukleniyor: false });
+          } else {
+            set({ yukleniyor: false });
+          }
         }
       },
 
