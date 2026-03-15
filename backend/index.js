@@ -18,7 +18,21 @@ const app = express();
 app.set('trust proxy', 1);
 
 // Güvenlik başlıkları (XSS, clickjacking, MIME sniffing vb.)
-app.use(helmet({ contentSecurityPolicy: false })); // CSP frontend ile çakışabileceğinden kapalı
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc:  ["'self'", "'unsafe-inline'"],
+      styleSrc:   ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc:    ["'self'", "https://fonts.gstatic.com"],
+      imgSrc:     ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'",
+        ...(process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
+          .split(',').map(o => o.trim())
+      ],
+    },
+  },
+}));
 
 // CORS: Sadece izin verilen origin'lerden gelen istekleri kabul et
 const izinliOriginler = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
