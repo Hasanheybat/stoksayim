@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import {
   ClipboardList, Building2, Search, X, ChevronDown, Check,
   Calendar, User, Warehouse, Package, ChevronLeft, ChevronRight,
-  LockKeyhole, LockKeyholeOpen, FileText, FileSpreadsheet,
+  LockKeyhole, LockKeyholeOpen, FileText, FileSpreadsheet, RotateCcw, Trash2,
 } from 'lucide-react';
 import api from '../../lib/apiAdm';
 import jsPDF from 'jspdf';
@@ -21,6 +21,7 @@ const GRAD = {
 const DURUM_MAP = {
   devam:      { label: 'Devam Ediyor', bg: '#EFF6FF', color: '#2563EB', dot: '#3B82F6' },
   tamamlandi: { label: 'Tamamlandı',   bg: '#F0FDF4', color: '#15803D', dot: '#22C55E' },
+  silindi:    { label: 'Silinmiş',     bg: '#FEF2F2', color: '#DC2626', dot: '#EF4444' },
 };
 
 /* ── Page Header ── */
@@ -255,6 +256,7 @@ function SayimDetayModal({ sayimId, onClose, onStatusChange }) {
             {/* Bilgi satırları */}
             <div className="px-5 py-4 space-y-2.5 border-b border-gray-100">
               {[
+                { label: 'Sayım ID', value: `#${sayim.id?.split('-')[0]?.toUpperCase()}` },
                 { label: 'İşletme',  value: sayim.isletmeler?.ad },
                 { label: 'Depo',     value: sayim.depolar?.ad },
                 { label: 'Tarih',    value: sayim.tarih ? new Date(sayim.tarih).toLocaleDateString('tr-TR') : null },
@@ -348,6 +350,8 @@ export default function SayimlarAdminPage() {
   const [seciliIsletmeler, setSeciliIsletmeler] = useState([]);
   const [seciliDepo, setSeciliDepo]           = useState('');
   const [seciliDurum, setSeciliDurum]         = useState('');
+  const [durumFiltre, setDurumFiltre]         = useState('aktif');
+  const [geriAlSayim, setGeriAlSayim]         = useState(null);
   const [aramaInput, setAramaInput]           = useState('');
   const [arama, setArama]                     = useState('');
   const [yukleniyor, setYukleniyor]           = useState(false);
@@ -385,17 +389,21 @@ export default function SayimlarAdminPage() {
       if (seciliIsletmeler.length === 1) p.set('isletme_id', seciliIsletmeler[0]);
       else if (seciliIsletmeler.length > 1) p.set('isletme_ids', seciliIsletmeler.join(','));
       if (seciliDepo)  p.set('depo_id', seciliDepo);
-      if (seciliDurum) p.set('durum', seciliDurum);
+      if (durumFiltre === 'pasif') p.set('durum', 'silindi');
+      else if (seciliDurum) p.set('durum', seciliDurum);
+      p.set('toplama', '0');
       if (arama)       p.set('q', arama);
       const { data: res } = await api.get(`/sayimlar?${p}`);
-      setSayimlar((res.data || []).filter(s => s.durum !== 'silindi'));
+      let liste = res.data || [];
+      if (durumFiltre === 'aktif') liste = liste.filter(s => s.durum !== 'silindi');
+      setSayimlar(liste);
       setToplam(res.toplam || 0);
     } catch {
       toast.error('Sayımlar yüklenemedi.');
     } finally {
       setYukleniyor(false);
     }
-  }, [sayfa, seciliIsletmeler, seciliDepo, seciliDurum, arama]);
+  }, [sayfa, seciliIsletmeler, seciliDepo, seciliDurum, durumFiltre, arama]);
 
   useEffect(() => { getSayimlar(); }, [getSayimlar]);
 
@@ -403,6 +411,19 @@ export default function SayimlarAdminPage() {
   const handleIsletmeChange = (v) => { setSeciliIsletmeler(v); setSayfa(1); };
   const handleDepoChange = (v) => { setSeciliDepo(v); setSayfa(1); };
   const handleDurumChange = (v) => { setSeciliDurum(v); setSayfa(1); };
+  const handleDurumFiltreChange = (v) => { setDurumFiltre(v); setSayfa(1); };
+
+  const handleGeriAl = async () => {
+    if (!geriAlSayim) return;
+    try {
+      await api.put(`/sayimlar/${geriAlSayim.id}/restore`);
+      toast.success('Sayım geri alındı.');
+      setGeriAlSayim(null);
+      getSayimlar();
+    } catch (err) {
+      toast.error(err.response?.data?.hata || 'Geri alma başarısız.');
+    }
+  };
 
   const sayfaSayisi = Math.max(1, Math.ceil(toplam / LIMIT));
   const devamEden  = sayimlar.filter(s => s.durum === 'devam').length;
@@ -452,14 +473,27 @@ export default function SayimlarAdminPage() {
           )}
 
           {/* Durum filtresi */}
-          <select value={seciliDurum}
-            onChange={e => handleDurumChange(e.target.value)}
-            className="px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white outline-none focus:border-indigo-400 text-gray-700 min-w-[140px]"
-            style={{ borderColor: seciliDurum ? '#6366F1' : undefined, color: seciliDurum ? '#6366F1' : undefined }}>
-            <option value="">Tüm Durumlar</option>
-            <option value="devam">Devam Ediyor</option>
-            <option value="tamamlandi">Tamamlandı</option>
-          </select>
+          {durumFiltre !== 'pasif' && (
+            <select value={seciliDurum}
+              onChange={e => handleDurumChange(e.target.value)}
+              className="px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white outline-none focus:border-indigo-400 text-gray-700 min-w-[140px]"
+              style={{ borderColor: seciliDurum ? '#6366F1' : undefined, color: seciliDurum ? '#6366F1' : undefined }}>
+              <option value="">Tüm Durumlar</option>
+              <option value="devam">Devam Ediyor</option>
+              <option value="tamamlandi">Tamamlandı</option>
+            </select>
+          )}
+
+          {/* Aktif / Pasif toggle */}
+          <div className="flex bg-white rounded-xl border border-gray-200 p-1">
+            {[{ k: 'tumu', l: 'Tümü' }, { k: 'aktif', l: 'Aktif' }, { k: 'pasif', l: 'Pasif' }].map(f => (
+              <button key={f.k} onClick={() => handleDurumFiltreChange(f.k)}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                style={durumFiltre === f.k ? { background: '#6366F1', color: 'white' } : { color: '#94A3B8' }}>
+                {f.l}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* İçerik */}
@@ -480,19 +514,20 @@ export default function SayimlarAdminPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
             {sayimlar.map(s => {
               const d = DURUM_MAP[s.durum] || DURUM_MAP.devam;
+              const silindi = s.durum === 'silindi';
               return (
-                <button key={s.id}
-                  onClick={() => setSeciliSayimId(s.id)}
-                  className="bg-white rounded-xl px-3 py-2.5 border border-gray-100 hover:border-teal-200 hover:shadow-sm transition-all text-left flex flex-col gap-2">
+                <div key={s.id}
+                  className={`rounded-xl px-3 py-2.5 border transition-all text-left flex flex-col gap-2 ${silindi ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100 hover:border-teal-200 hover:shadow-sm cursor-pointer'}`}
+                  onClick={() => !silindi && setSeciliSayimId(s.id)}>
 
                   {/* Üst: başlık + durum */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{ background: GRAD.teal }}>
-                        <ClipboardList className="w-3.5 h-3.5 text-white" />
+                        style={{ background: silindi ? 'linear-gradient(135deg,#EF4444,#DC2626)' : GRAD.teal }}>
+                        {silindi ? <Trash2 className="w-3.5 h-3.5 text-white" /> : <ClipboardList className="w-3.5 h-3.5 text-white" />}
                       </div>
-                      <p className="text-sm font-semibold text-gray-900 truncate leading-tight">{s.ad}</p>
+                      <p className={`text-sm font-semibold truncate leading-tight ${silindi ? 'text-red-400 line-through' : 'text-gray-900'}`}>{s.ad}</p>
                     </div>
                     <span className="flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
                       style={{ background: d.bg, color: d.color }}>
@@ -517,22 +552,32 @@ export default function SayimlarAdminPage() {
                     )}
                   </div>
 
-                  {/* En alt: tarih + kullanıcı */}
-                  <div className="flex items-center gap-3 text-xs text-gray-400 border-t border-gray-100 pt-1.5 mt-0.5">
-                    {s.tarih && (
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {new Date(s.tarih).toLocaleDateString('tr-TR')}
-                      </span>
-                    )}
-                    {s.kullanicilar?.ad_soyad && (
-                      <span className="flex items-center gap-1 truncate">
-                        <User className="w-3 h-3 flex-shrink-0" />
-                        <span className="truncate">{s.kullanicilar.ad_soyad}</span>
-                      </span>
-                    )}
-                  </div>
-                </button>
+                  {/* En alt: tarih + kullanıcı / geri al */}
+                  {silindi ? (
+                    <div className="border-t border-red-200 pt-1.5 mt-0.5">
+                      <button onClick={(e) => { e.stopPropagation(); setGeriAlSayim(s); }}
+                        className="flex items-center justify-center gap-1 w-full py-1.5 rounded-lg text-xs font-semibold border border-green-200 hover:bg-green-100 text-green-600 transition-colors"
+                        style={{ background: '#DCFCE7' }}>
+                        <RotateCcw className="w-3 h-3" />Geri Al
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 text-xs text-gray-400 border-t border-gray-100 pt-1.5 mt-0.5">
+                      {s.tarih && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {new Date(s.tarih).toLocaleDateString('tr-TR')}
+                        </span>
+                      )}
+                      {s.kullanicilar?.ad_soyad && (
+                        <span className="flex items-center gap-1 truncate">
+                          <User className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{s.kullanicilar.ad_soyad}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -562,6 +607,42 @@ export default function SayimlarAdminPage() {
           onClose={() => setSeciliSayimId(null)}
           onStatusChange={getSayimlar}
         />
+      )}
+
+      {/* Geri Al Onay Modalı */}
+      {geriAlSayim && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
+          onClick={() => setGeriAlSayim(null)}>
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-6"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#DCFCE7' }}>
+                <RotateCcw className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900 text-sm">Sayımı Geri Al</p>
+                <p className="text-xs text-gray-400">Bu sayım tekrar aktif olacak</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 mb-5">
+              <span className="font-bold">{geriAlSayim.ad}</span> geri alınacak. Devam etmek istiyor musunuz?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setGeriAlSayim(null)}
+                className="py-3 rounded-xl font-bold text-sm text-gray-500 transition-colors"
+                style={{ background: '#F3F4F6' }}>
+                Vazgeç
+              </button>
+              <button onClick={handleGeriAl}
+                className="py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-colors"
+                style={{ background: '#10B981' }}>
+                <RotateCcw className="w-4 h-4" />
+                Geri Al
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

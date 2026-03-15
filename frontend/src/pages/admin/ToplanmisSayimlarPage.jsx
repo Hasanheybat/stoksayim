@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import {
   Calculator, Building2, Search, X, ChevronDown, Check,
   Calendar, User, ClipboardList, ChevronLeft, ChevronRight,
-  Info, Pencil, Trash2, Package, FileText, FileSpreadsheet,
+  Info, Pencil, Trash2, Package, FileText, FileSpreadsheet, RotateCcw,
 } from 'lucide-react';
 import api from '../../lib/apiAdm';
 import jsPDF from 'jspdf';
@@ -346,6 +346,7 @@ function InfoModal({ sayim, onClose }) {
 
         <div className="px-5 py-4 space-y-2.5 border-b border-gray-100">
           {[
+            { label: 'Sayım ID', value: `#${sayim.id?.split('-')[0]?.toUpperCase()}` },
             { label: 'İşletme', value: sayim.isletmeler?.ad },
             { label: 'Tarih', value: formatTarih(sayim.tarih) },
             { label: 'Kullanıcı', value: sayim.kullanicilar?.ad_soyad },
@@ -540,6 +541,9 @@ export default function ToplanmisSayimlarAdminPage() {
   const [sayfa, setSayfa]                       = useState(1);
   const [toplam, setToplam]                     = useState(0);
 
+  const [durumFiltre, setDurumFiltre]      = useState('aktif');
+  const [geriAlSayim, setGeriAlSayim]    = useState(null);
+
   // Modals
   const [detaySayim, setDetaySayim]     = useState(null);
   const [infoSayim, setInfoSayim]       = useState(null);
@@ -564,20 +568,37 @@ export default function ToplanmisSayimlarAdminPage() {
       const p = new URLSearchParams({ sayfa, limit: LIMIT, toplama: 1 });
       if (seciliIsletmeler.length === 1) p.set('isletme_id', seciliIsletmeler[0]);
       else if (seciliIsletmeler.length > 1) p.set('isletme_ids', seciliIsletmeler.join(','));
+      if (durumFiltre === 'pasif') p.set('durum', 'silindi');
       if (arama) p.set('q', arama);
       const { data: res } = await api.get(`/sayimlar?${p}`);
-      setSayimlar((res.data || []).filter(s => s.durum !== 'silindi'));
+      let liste = res.data || [];
+      if (durumFiltre === 'aktif') liste = liste.filter(s => s.durum !== 'silindi');
+      setSayimlar(liste);
       setToplam(res.toplam || 0);
     } catch {
       toast.error('Sayımlar yüklenemedi.');
     } finally {
       setYukleniyor(false);
     }
-  }, [sayfa, seciliIsletmeler, arama]);
+  }, [sayfa, seciliIsletmeler, durumFiltre, arama]);
 
   useEffect(() => { getSayimlar(); }, [getSayimlar]);
 
   const handleIsletmeChange = (v) => { setSeciliIsletmeler(v); setSayfa(1); };
+  const handleDurumFiltreChange = (v) => { setDurumFiltre(v); setSayfa(1); };
+
+  const handleGeriAl = async () => {
+    if (!geriAlSayim) return;
+    try {
+      await api.put(`/sayimlar/${geriAlSayim.id}/restore`);
+      toast.success('Sayım geri alındı.');
+      setGeriAlSayim(null);
+      getSayimlar();
+    } catch (err) {
+      toast.error(err.response?.data?.hata || 'Geri alma başarısız.');
+    }
+  };
+
   const sayfaSayisi = Math.max(1, Math.ceil(toplam / LIMIT));
 
   return (
@@ -609,6 +630,17 @@ export default function ToplanmisSayimlarAdminPage() {
             secili={seciliIsletmeler}
             onChange={handleIsletmeChange}
           />
+
+          {/* Aktif / Pasif toggle */}
+          <div className="flex bg-white rounded-xl border border-gray-200 p-1">
+            {[{ k: 'tumu', l: 'Tümü' }, { k: 'aktif', l: 'Aktif' }, { k: 'pasif', l: 'Pasif' }].map(f => (
+              <button key={f.k} onClick={() => handleDurumFiltreChange(f.k)}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                style={durumFiltre === f.k ? { background: '#6366F1', color: 'white' } : { color: '#94A3B8' }}>
+                {f.l}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* İçerik */}
@@ -629,25 +661,34 @@ export default function ToplanmisSayimlarAdminPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
             {sayimlar.map(s => {
               const kaynaklar = parseKaynaklar(s.notlar);
+              const silindi = s.durum === 'silindi';
               return (
                 <div key={s.id}
-                  onClick={() => setDetaySayim(s)}
-                  className="bg-white rounded-xl px-3 py-2.5 border border-gray-100 hover:border-indigo-200 hover:shadow-sm transition-all text-left flex flex-col gap-2 cursor-pointer">
+                  onClick={() => !silindi && setDetaySayim(s)}
+                  className={`rounded-xl px-3 py-2.5 border transition-all text-left flex flex-col gap-2 ${silindi ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100 hover:border-indigo-200 hover:shadow-sm cursor-pointer'}`}>
 
                   {/* Üst: başlık + kaç sayım toplandı */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{ background: GRAD.purple }}>
-                        <Calculator className="w-3.5 h-3.5 text-white" />
+                        style={{ background: silindi ? 'linear-gradient(135deg,#EF4444,#DC2626)' : GRAD.purple }}>
+                        {silindi ? <Trash2 className="w-3.5 h-3.5 text-white" /> : <Calculator className="w-3.5 h-3.5 text-white" />}
                       </div>
-                      <p className="text-sm font-semibold text-gray-900 truncate leading-tight">{s.ad}</p>
+                      <p className={`text-sm font-semibold truncate leading-tight ${silindi ? 'text-red-400 line-through' : 'text-gray-900'}`}>{s.ad}</p>
                     </div>
-                    <span className="flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
-                      style={{ background: '#EEF2FF', color: '#6366F1' }}>
-                      <Calculator className="w-3 h-3" />
-                      {kaynaklar.length} sayım
-                    </span>
+                    {silindi ? (
+                      <span className="flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                        style={{ background: '#FEF2F2', color: '#DC2626' }}>
+                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#EF4444' }} />
+                        Silinmiş
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                        style={{ background: '#EEF2FF', color: '#6366F1' }}>
+                        <Calculator className="w-3 h-3" />
+                        {kaynaklar.length} sayım
+                      </span>
+                    )}
                   </div>
 
                   {/* İşletme */}
@@ -658,37 +699,47 @@ export default function ToplanmisSayimlarAdminPage() {
                     </div>
                   )}
 
-                  {/* Alt: tarih + kullanıcı + butonlar */}
-                  <div className="flex items-center gap-2 border-t border-gray-100 pt-1.5 mt-0.5">
-                    <div className="flex items-center gap-3 text-xs text-gray-400 flex-1 min-w-0">
-                      {s.tarih && (
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {formatTarih(s.tarih)}
-                        </span>
-                      )}
-                      {s.kullanicilar?.ad_soyad && (
-                        <span className="flex items-center gap-1 truncate">
-                          <User className="w-3 h-3 flex-shrink-0" />
-                          <span className="truncate">{s.kullanicilar.ad_soyad}</span>
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setInfoSayim(s); }}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-indigo-50 transition-colors"
-                        title="Kaynak Sayımlar">
-                        <Info className="w-3.5 h-3.5 text-indigo-500" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setDuzenleSayim(s); }}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-amber-50 transition-colors"
-                        title="Düzenle">
-                        <Pencil className="w-3.5 h-3.5 text-amber-600" />
+                  {/* Alt: tarih + kullanıcı + butonlar / geri al */}
+                  {silindi ? (
+                    <div className="border-t border-red-200 pt-1.5 mt-0.5">
+                      <button onClick={(e) => { e.stopPropagation(); setGeriAlSayim(s); }}
+                        className="flex items-center justify-center gap-1 w-full py-1.5 rounded-lg text-xs font-semibold border border-green-200 hover:bg-green-100 text-green-600 transition-colors"
+                        style={{ background: '#DCFCE7' }}>
+                        <RotateCcw className="w-3 h-3" />Geri Al
                       </button>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex items-center gap-2 border-t border-gray-100 pt-1.5 mt-0.5">
+                      <div className="flex items-center gap-3 text-xs text-gray-400 flex-1 min-w-0">
+                        {s.tarih && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {formatTarih(s.tarih)}
+                          </span>
+                        )}
+                        {s.kullanicilar?.ad_soyad && (
+                          <span className="flex items-center gap-1 truncate">
+                            <User className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">{s.kullanicilar.ad_soyad}</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setInfoSayim(s); }}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-indigo-50 transition-colors"
+                          title="Kaynak Sayımlar">
+                          <Info className="w-3.5 h-3.5 text-indigo-500" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDuzenleSayim(s); }}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-amber-50 transition-colors"
+                          title="Düzenle">
+                          <Pencil className="w-3.5 h-3.5 text-amber-600" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -736,6 +787,42 @@ export default function ToplanmisSayimlarAdminPage() {
           onClose={() => setSilSayim(null)}
           onConfirm={() => { setSilSayim(null); getSayimlar(); }}
         />
+      )}
+
+      {/* Geri Al Onay Modalı */}
+      {geriAlSayim && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
+          onClick={() => setGeriAlSayim(null)}>
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-6"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#DCFCE7' }}>
+                <RotateCcw className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900 text-sm">Sayımı Geri Al</p>
+                <p className="text-xs text-gray-400">Bu sayım tekrar aktif olacak</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 mb-5">
+              <span className="font-bold">{geriAlSayim.ad}</span> geri alınacak. Devam etmek istiyor musunuz?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setGeriAlSayim(null)}
+                className="py-3 rounded-xl font-bold text-sm text-gray-500 transition-colors"
+                style={{ background: '#F3F4F6' }}>
+                Vazgeç
+              </button>
+              <button onClick={handleGeriAl}
+                className="py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-colors"
+                style={{ background: '#10B981' }}>
+                <RotateCcw className="w-4 h-4" />
+                Geri Al
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

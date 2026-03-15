@@ -377,4 +377,17 @@ router.put('/:id/yetkiler', async (req, res) => {
   }
 });
 
+// PUT /api/kullanicilar/:id/restore — Silinen kullanıcıyı geri al
+router.put('/:id/restore', async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT id, aktif FROM kullanicilar WHERE id = ?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ hata: 'Kullanıcı bulunamadı.' });
+    if (rows[0].aktif === 1) return res.status(400).json({ hata: 'Bu kullanıcı zaten aktif.' });
+    await pool.execute('UPDATE kullanicilar SET aktif = 1 WHERE id = ?', [req.params.id]);
+    res.json({ mesaj: 'Kullanıcı geri alındı.' });
+  } catch (err) {
+    return res.status(500).json({ hata: err.message });
+  }
+});
+
 module.exports = router;

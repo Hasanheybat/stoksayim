@@ -63,6 +63,25 @@ async function checkUrunYetki(req, res, islem) {
   return true;
 }
 
+// Aynı işletmede başka bir üründe bu barkod var mı kontrol et
+async function barkodBenzersizKontrol(isletmeId, barkodlar, haricUrunId = null) {
+  if (!barkodlar || !barkodlar.length) return null;
+  const [rows] = await pool.execute(
+    'SELECT id, urun_adi, barkodlar FROM isletme_urunler WHERE isletme_id = ? AND aktif = 1',
+    [isletmeId]
+  );
+  for (const row of rows) {
+    if (haricUrunId && String(row.id) === String(haricUrunId)) continue;
+    const mevcutBarkodlar = (row.barkodlar || '').split(',').map(b => b.trim()).filter(Boolean);
+    for (const barkod of barkodlar) {
+      if (mevcutBarkodlar.includes(barkod)) {
+        return { barkod, urunAdi: row.urun_adi };
+      }
+    }
+  }
+  return null;
+}
+
 // Tüm rotalar kimlik doğrulaması gerektirir
 router.use(authGuard);
 
@@ -76,11 +95,19 @@ router.put('/:id', async (req, res) => {
   if (!urun_adi?.trim()) return res.status(400).json({ hata: 'İsim 1 (sayım ismi) boş olamaz.' });
   if (!urun_kodu?.trim()) return res.status(400).json({ hata: 'Stok kodu boş olamaz.' });
 
-  const barkodStr = Array.isArray(barkodlar)
-    ? barkodlar.map(b => b.trim()).filter(Boolean).join(',')
-    : (typeof barkodlar === 'string' ? barkodlar : '');
+  const barkodArr = Array.isArray(barkodlar)
+    ? barkodlar.map(b => b.trim()).filter(Boolean)
+    : (typeof barkodlar === 'string' ? barkodlar.split(',').map(b => b.trim()).filter(Boolean) : []);
+  const barkodStr = barkodArr.join(',');
 
   try {
+    // Aynı işletmede başka üründe bu barkod var mı?
+    const [urunRow] = await pool.execute('SELECT isletme_id FROM isletme_urunler WHERE id = ?', [req.params.id]);
+    if (urunRow.length && barkodArr.length) {
+      const cakisan = await barkodBenzersizKontrol(urunRow[0].isletme_id, barkodArr, req.params.id);
+      if (cakisan) return res.status(409).json({ hata: `"${cakisan.barkod}" barkodu "${cakisan.urunAdi}" ürününe zaten tanımlı.` });
+    }
+
     await pool.execute(
       `UPDATE isletme_urunler SET
         urun_adi = ?, urun_kodu = ?, isim_2 = ?, barkodlar = ?, birim = ?,
@@ -106,9 +133,16 @@ router.post('/', yetkiGuard('urun', 'ekle', 'body'), async (req, res) => {
     return res.status(400).json({ hata: 'isletme_id ve urun_adi zorunludur.' });
   }
 
-  const barkodStr = Array.isArray(barkodlar)
-    ? barkodlar.map(b => b.trim()).filter(Boolean).join(',')
-    : (typeof barkodlar === 'string' ? barkodlar : '');
+  const barkodArr = Array.isArray(barkodlar)
+    ? barkodlar.map(b => b.trim()).filter(Boolean)
+    : (typeof barkodlar === 'string' ? barkodlar.split(',').map(b => b.trim()).filter(Boolean) : []);
+  const barkodStr = barkodArr.join(',');
+
+  // Aynı işletmede başka üründe bu barkod var mı?
+  if (barkodArr.length) {
+    const cakisan = await barkodBenzersizKontrol(isletme_id, barkodArr);
+    if (cakisan) return res.status(409).json({ hata: `"${cakisan.barkod}" barkodu "${cakisan.urunAdi}" ürününe zaten tanımlı.` });
+  }
 
   const id = crypto.randomUUID();
   const kod = urun_kodu?.trim() || `STK-${id.slice(0, 8)}`;
@@ -134,6 +168,19 @@ router.delete('/:id', async (req, res) => {
   try {
     await pool.execute('UPDATE isletme_urunler SET aktif = 0 WHERE id = ?', [req.params.id]);
     res.json({ mesaj: 'Ürün silindi.' });
+  } catch (err) {
+    return res.status(500).json({ hata: err.message });
+  }
+});
+
+// PUT /:id/restore — Silinen ürünü geri al (admin only)
+router.put('/:id/restore', adminGuard, async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT id, aktif FROM isletme_urunler WHERE id = ?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
+    if (rows[0].aktif === 1) return res.status(400).json({ hata: 'Bu ürün zaten aktif.' });
+    await pool.execute('UPDATE isletme_urunler SET aktif = 1, son_guncelleme = NOW() WHERE id = ?', [req.params.id]);
+    res.json({ mesaj: 'Ürün geri alındı.' });
   } catch (err) {
     return res.status(500).json({ hata: err.message });
   }
@@ -237,14 +284,23 @@ router.get('/sablon', (req, res) => {
 
 // GET /api/urunler?isletme_id=X&q=arama&sayfa=1  (isletme_id opsiyonel)
 router.get('/', async (req, res) => {
-  const { isletme_id, q, alan, sayfa = 1, limit = 20 } = req.query;
+  const { isletme_id, q, alan, aktif, sayfa = 1, limit = 20 } = req.query;
 
   const sp = Math.max(1, (v => Number.isNaN(v) ? 1 : v)(parseInt(sayfa)));
   const lm = Math.min(200, Math.max(1, (v => Number.isNaN(v) ? 20 : v)(parseInt(limit))));
   const offset = (sp - 1) * lm;
 
-  const where = ['u.aktif = 1'];
+  const where = [];
   const params = [];
+
+  // Admin aktif/pasif filtresi: ?aktif=0 (silinenleri), ?aktif=all (hepsini), default aktif=1
+  if (req.user.rol === 'admin' && aktif === '0') {
+    where.push('u.aktif = 0');
+  } else if (req.user.rol === 'admin' && aktif === 'all') {
+    // filtre yok — hepsini getir
+  } else {
+    where.push('u.aktif = 1');
+  }
 
   if (isletme_id) {
     where.push('u.isletme_id = ?');
@@ -341,7 +397,14 @@ router.post('/:id/barkod', async (req, res) => {
     .filter(b => b.length > 0);
 
   if (barkodlar.includes(barkod)) {
-    return res.status(409).json({ hata: 'Bu barkod zaten tanımlı.' });
+    return res.status(409).json({ hata: 'Bu barkod zaten bu ürüne tanımlı.' });
+  }
+
+  // Aynı işletmede başka üründe bu barkod var mı?
+  const [isletmeRow] = await pool.execute('SELECT isletme_id FROM isletme_urunler WHERE id = ?', [req.params.id]);
+  if (isletmeRow.length) {
+    const cakisan = await barkodBenzersizKontrol(isletmeRow[0].isletme_id, [barkod], req.params.id);
+    if (cakisan) return res.status(409).json({ hata: `"${barkod}" barkodu "${cakisan.urunAdi}" ürününe zaten tanımlı.` });
   }
 
   barkodlar.push(barkod);

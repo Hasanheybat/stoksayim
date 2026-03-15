@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Users, ShieldCheck, UserCheck, Plus, Pencil, Power, Search, Building2, ChevronDown, Check, X, AlertTriangle, Save, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, ShieldCheck, UserCheck, Plus, Pencil, Power, Search, Building2, ChevronDown, Check, X, AlertTriangle, Save, Shield, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import api from '../../lib/apiAdm';
 
 /* ── Yetki sabitleri ── */
@@ -290,6 +290,8 @@ export default function KullanicilarPage() {
   const [loading,        setLoading]        = useState(true);
   const [modalOpen,      setModalOpen]      = useState(false);
   const [filtre,         setFiltre]         = useState('Tümü');
+  const [aktifFiltre,    setAktifFiltre]    = useState('tumu'); // 'tumu' | 'aktif' | 'pasif'
+  const [geriAlKullanici, setGeriAlKullanici] = useState(null);
   const [search,         setSearch]         = useState('');
   const [aramaDebounce,  setAramaDebounce]  = useState('');
   const [seciliIsletmeler, setSeciliIsletmeler] = useState([]);
@@ -329,6 +331,8 @@ export default function KullanicilarPage() {
       if (aramaDebounce) p.set('q', aramaDebounce);
       if (filtre === 'Admin')    p.set('rol', 'admin');
       if (filtre === 'Kullanıcı') p.set('rol', 'kullanici');
+      if (aktifFiltre === 'aktif') p.set('filtre', 'Aktif');
+      else if (aktifFiltre === 'pasif') p.set('filtre', 'Pasif');
       const { data } = await api.get(`/kullanicilar?${p}`);
       setKullanicilar(data.data || []);
       setToplam(data.toplam || 0);
@@ -337,11 +341,23 @@ export default function KullanicilarPage() {
     } finally {
       setLoading(false);
     }
-  }, [sayfa, aramaDebounce, filtre]);
+  }, [sayfa, aramaDebounce, filtre, aktifFiltre]);
 
   useEffect(() => { load(); }, [load]);
 
   const handleFiltre = (f) => { setFiltre(f); setSayfa(1); };
+
+  const handleGeriAl = async () => {
+    if (!geriAlKullanici) return;
+    try {
+      await api.put(`/kullanicilar/${geriAlKullanici.id}/restore`);
+      toast.success('Kullanıcı geri alındı.');
+      setGeriAlKullanici(null);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.hata || 'Geri alma başarısız.');
+    }
+  };
 
   const handleSave = async e => {
     e.preventDefault();
@@ -507,6 +523,17 @@ export default function KullanicilarPage() {
             ))}
           </div>
 
+          {/* Aktif/Pasif filtre */}
+          <div className="flex bg-white rounded-xl border border-gray-200 p-1 flex-shrink-0">
+            {[{ k: 'tumu', l: 'Tümü' }, { k: 'aktif', l: 'Aktif' }, { k: 'pasif', l: 'Pasif' }].map(f => (
+              <button key={f.k} onClick={() => { setAktifFiltre(f.k); setSayfa(1); }}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                style={aktifFiltre === f.k ? { background: '#10B981', color: 'white' } : { color: '#94A3B8' }}>
+                {f.l}
+              </button>
+            ))}
+          </div>
+
           {/* Yeni Kullanıcı */}
           <button onClick={() => setModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white shadow-sm flex-shrink-0"
@@ -589,10 +616,10 @@ export default function KullanicilarPage() {
                           <Power className="w-3.5 h-3.5" style={{ color: '#EF4444' }} />
                         </button>
                       ) : (
-                        <button onClick={() => setAktifOnay({ id: k.id, ad_soyad: k.ad_soyad })}
+                        <button onClick={() => setGeriAlKullanici(k)}
                           className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-green-100 transition-colors"
-                          style={{ background: '#F0FDF4' }} title="Aktifleştir">
-                          <Power className="w-3.5 h-3.5" style={{ color: '#16A34A' }} />
+                          style={{ background: '#DCFCE7' }} title="Geri Al">
+                          <RotateCcw className="w-3.5 h-3.5" style={{ color: '#16A34A' }} />
                         </button>
                       )}
                     </div>
@@ -1050,6 +1077,42 @@ export default function KullanicilarPage() {
                   : <Save className="w-4 h-4" />
                 }
                 Kaydet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Geri Al Onay Modalı */}
+      {geriAlKullanici && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
+          onClick={() => setGeriAlKullanici(null)}>
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-6"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#DCFCE7' }}>
+                <RotateCcw className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900 text-sm">Kullanıcıyı Geri Al</p>
+                <p className="text-xs text-gray-400">Bu kullanıcı tekrar aktif olacak</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 mb-5">
+              <span className="font-bold">{geriAlKullanici.ad_soyad}</span> geri alınacak. Devam etmek istiyor musunuz?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setGeriAlKullanici(null)}
+                className="py-3 rounded-xl font-bold text-sm text-gray-500 transition-colors"
+                style={{ background: '#F3F4F6' }}>
+                Vazgeç
+              </button>
+              <button onClick={handleGeriAl}
+                className="py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-colors"
+                style={{ background: '#10B981' }}>
+                <RotateCcw className="w-4 h-4" />
+                Geri Al
               </button>
             </div>
           </div>

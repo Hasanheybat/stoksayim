@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Warehouse, Building2, MapPin, Plus, Pencil, ClipboardList, Search, ChevronDown, Check, X, ChevronRight, Calendar, User, Package, LockKeyhole, LockKeyholeOpen, ChevronLeft, FileText, FileSpreadsheet } from 'lucide-react';
+import { Warehouse, Building2, MapPin, Plus, Pencil, ClipboardList, Search, ChevronDown, Check, X, ChevronRight, Calendar, User, Package, LockKeyhole, LockKeyholeOpen, ChevronLeft, FileText, FileSpreadsheet, RotateCcw } from 'lucide-react';
 import api from '../../lib/apiAdm';
 import useAuthStoreAdm from '../../store/authStoreAdm';
 import jsPDF from 'jspdf';
@@ -388,6 +388,7 @@ function SayimDetayModal({ sayimId, onClose, onStatusChange }) {
 const DURUM_MAP = {
   devam:       { label: 'Devam Ediyor', bg: '#EFF6FF', color: '#2563EB', dot: '#3B82F6' },
   tamamlandi:  { label: 'Tamamlandı',   bg: '#F0FDF4', color: '#15803D', dot: '#22C55E' },
+  silindi:     { label: 'Silinmiş',     bg: '#FEF2F2', color: '#DC2626', dot: '#EF4444' },
 };
 
 function SayimlarPanel({ depo, onClose }) {
@@ -561,6 +562,8 @@ export default function DepolarPage() {
   const [sayimlarDepo, setSayimlarDepo] = useState(null);
   const [sayfa, setSayfa] = useState(1);
   const [toplam, setToplam] = useState(0);
+  const [aktifFiltre, setAktifFiltre] = useState('aktif'); // 'tumu' | 'aktif' | 'pasif'
+  const [geriAlDepo, setGeriAlDepo]   = useState(null);
 
   // Debounce search
   useEffect(() => {
@@ -580,6 +583,8 @@ export default function DepolarPage() {
       if (aramaDebounce) p.set('q', aramaDebounce);
       if (seciliIsletmeler.length === 1) p.set('isletme_id', seciliIsletmeler[0]);
       else if (seciliIsletmeler.length > 1) p.set('isletme_ids', seciliIsletmeler.join(','));
+      if (aktifFiltre === 'aktif') p.set('aktif', 'true');
+      else if (aktifFiltre === 'pasif') p.set('aktif', 'false');
       const { data } = await api.get(`/depolar?${p}`);
       // Backend returns sayim_sayisi and isletmeler join
       setDepolar((data.data || []).map(d => ({
@@ -591,11 +596,23 @@ export default function DepolarPage() {
       setToplam(data.toplam || 0);
     } catch { toast.error('Depolar yüklenemedi.'); }
     finally { setLoading(false); }
-  }, [sayfa, aramaDebounce, seciliIsletmeler]);
+  }, [sayfa, aramaDebounce, seciliIsletmeler, aktifFiltre]);
 
   useEffect(() => { load(); }, [load]);
 
   const handleSeciliIsletmelerChange = (val) => { setSeciliIsletmeler(val); setSayfa(1); };
+
+  const handleGeriAl = async () => {
+    if (!geriAlDepo) return;
+    try {
+      await api.put(`/depolar/${geriAlDepo.id}/restore`);
+      toast.success('Depo geri alındı.');
+      setGeriAlDepo(null);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.hata || 'Geri alma başarısız.');
+    }
+  };
 
   const handleSave = async (form) => {
     try {
@@ -628,6 +645,17 @@ export default function DepolarPage() {
             secili={seciliIsletmeler}
             onChange={handleSeciliIsletmelerChange}
           />
+          {/* Aktif/Pasif filtre */}
+          <div className="flex bg-white rounded-xl border border-gray-200 p-1">
+            {[{ k: 'tumu', l: 'Tümü' }, { k: 'aktif', l: 'Aktif' }, { k: 'pasif', l: 'Pasif' }].map(f => (
+              <button key={f.k} onClick={() => { setAktifFiltre(f.k); setSayfa(1); }}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                style={aktifFiltre === f.k ? { background: '#6366F1', color: 'white' } : { color: '#94A3B8' }}>
+                {f.l}
+              </button>
+            ))}
+          </div>
+
           {/* Yeni Depo */}
           <button onClick={() => { setEditing(null); setModalOpen(true); }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white shadow-sm whitespace-nowrap flex-shrink-0"
@@ -647,15 +675,23 @@ export default function DepolarPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-            {depolar.map(d => (
-              <div key={d.id} className="bg-white rounded-xl px-3 py-2.5 border border-gray-100 hover:border-blue-100 hover:shadow-sm transition-all flex flex-col gap-2">
+            {depolar.map(d => {
+              const pasif = d.aktif === 0 || d.aktif === false;
+              return (
+              <div key={d.id} className={`rounded-xl px-3 py-2.5 border transition-all flex flex-col gap-2 ${pasif ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100 hover:border-blue-100 hover:shadow-sm'}`}>
                 {/* Üst: ikon + ad + badges */}
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: GRAD.blue }}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: pasif ? 'linear-gradient(135deg,#EF4444,#DC2626)' : GRAD.blue }}>
                     <Warehouse className="w-4 h-4 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 text-sm truncate leading-tight">{d.ad}</h3>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className={`font-semibold text-sm truncate leading-tight ${pasif ? 'text-red-400 line-through' : 'text-gray-900'}`}>{d.ad}</h3>
+                      {pasif && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                          style={{ background: '#FEE2E2', color: '#DC2626' }}>Silinmiş</span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                       {d.kod && <span className="text-[11px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{d.kod}</span>}
                       {d.isletme_adi && (
@@ -675,24 +711,35 @@ export default function DepolarPage() {
                 )}
                 {/* Butonlar */}
                 <div className="flex gap-1.5 border-t border-gray-100 pt-2">
-                  <button onClick={() => setSayimlarDepo(d)}
-                    className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors">
-                    <ClipboardList className="w-3 h-3" />Sayımlar
-                    {d.sayimSayisi > 0 && (
-                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black"
-                        style={{ background: '#F0FDF4', color: '#15803D' }}>
-                        {d.sayimSayisi}
-                      </span>
-                    )}
-                  </button>
-                  <button onClick={() => { setEditing(d); setModalOpen(true); }}
-                    className="w-8 flex items-center justify-center py-1.5 rounded-lg border border-gray-200 hover:bg-indigo-50 transition-colors"
-                    style={{background:'#EEF2FF'}} title="Düzenle">
-                    <Pencil className="w-3.5 h-3.5" style={{color:'#6366F1'}}/>
-                  </button>
+                  {pasif ? (
+                    <button onClick={() => setGeriAlDepo(d)}
+                      className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold border border-green-200 hover:bg-green-100 text-green-600 transition-colors"
+                      style={{ background: '#DCFCE7' }}>
+                      <RotateCcw className="w-3 h-3" />Geri Al
+                    </button>
+                  ) : (
+                    <>
+                      <button onClick={() => setSayimlarDepo(d)}
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors">
+                        <ClipboardList className="w-3 h-3" />Sayımlar
+                        {d.sayimSayisi > 0 && (
+                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black"
+                            style={{ background: '#F0FDF4', color: '#15803D' }}>
+                            {d.sayimSayisi}
+                          </span>
+                        )}
+                      </button>
+                      <button onClick={() => { setEditing(d); setModalOpen(true); }}
+                        className="w-8 flex items-center justify-center py-1.5 rounded-lg border border-gray-200 hover:bg-indigo-50 transition-colors"
+                        style={{background:'#EEF2FF'}} title="Düzenle">
+                        <Pencil className="w-3.5 h-3.5" style={{color:'#6366F1'}}/>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
         {/* Sayfalama */}
@@ -714,6 +761,42 @@ export default function DepolarPage() {
       </div>
       <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} onSave={handleSave} initial={editing} isletmeler={isletmeler} />
       <SayimlarPanel depo={sayimlarDepo} onClose={() => setSayimlarDepo(null)} />
+
+      {/* Geri Al Onay Modalı */}
+      {geriAlDepo && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
+          onClick={() => setGeriAlDepo(null)}>
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-6"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#DCFCE7' }}>
+                <RotateCcw className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900 text-sm">Depoyu Geri Al</p>
+                <p className="text-xs text-gray-400">Bu depo tekrar aktif olacak</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 mb-5">
+              <span className="font-bold">{geriAlDepo.ad}</span> geri alınacak. Devam etmek istiyor musunuz?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setGeriAlDepo(null)}
+                className="py-3 rounded-xl font-bold text-sm text-gray-500 transition-colors"
+                style={{ background: '#F3F4F6' }}>
+                Vazgeç
+              </button>
+              <button onClick={handleGeriAl}
+                className="py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-colors"
+                style={{ background: '#10B981' }}>
+                <RotateCcw className="w-4 h-4" />
+                Geri Al
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
   Package, Building2, Upload, Plus, Search,
-  ChevronLeft, ChevronRight, Pencil, Trash2, X, Check,
+  ChevronLeft, ChevronRight, Pencil, Trash2, X, Check, RotateCcw,
 } from 'lucide-react';
 import api from '../../lib/apiAdm';
 
@@ -301,6 +301,8 @@ export default function UrunlerPage() {
   const [arama, setArama]                 = useState('');
   const [aramaInput, setAramaInput]       = useState('');
   const [yukleniyor, setYukleniyor]       = useState(false);
+  const [aktifFiltre, setAktifFiltre]     = useState('aktif'); // 'tumu' | 'aktif' | 'pasif'
+  const [geriAlUrun, setGeriAlUrun]       = useState(null);
 
   // Modal state
   const [modalAcik, setModalAcik]   = useState(false);
@@ -332,19 +334,35 @@ export default function UrunlerPage() {
       const p = new URLSearchParams({ sayfa, limit: 50 });
       if (seciliIsletme) p.set('isletme_id', seciliIsletme);
       if (arama)         p.set('q', arama);
+      if (aktifFiltre === 'aktif') p.set('aktif', '1');
+      else if (aktifFiltre === 'pasif') p.set('aktif', '0');
+      else p.set('aktif', 'all');
       const { data } = await api.get(`/urunler?${p}`);
       setUrunler(data.data);
       setToplam(data.toplam);
     } finally {
       setYukleniyor(false);
     }
-  }, [seciliIsletme, sayfa, arama]);
+  }, [seciliIsletme, sayfa, arama, aktifFiltre]);
 
   useEffect(() => { getUrunler(); }, [getUrunler]);
 
   // Modal aç
   const handleYeniUrun = () => { setSeciliUrun(null); setModalAcik(true); };
   const handleDuzenle  = (u, e) => { e.stopPropagation(); setSeciliUrun(u); setModalAcik(true); };
+
+  // Geri al
+  const handleGeriAl = async () => {
+    if (!geriAlUrun) return;
+    try {
+      await api.put(`/urunler/${geriAlUrun.id}/restore`);
+      toast.success('Ürün geri alındı.');
+      setGeriAlUrun(null);
+      getUrunler();
+    } catch (err) {
+      toast.error(err.response?.data?.hata || 'Geri alma başarısız.');
+    }
+  };
 
   // Excel modal aç
   const handleExcelAc = () => {
@@ -430,6 +448,17 @@ export default function UrunlerPage() {
             {isletmeler.map(i => <option key={i.id} value={i.id}>{i.ad}</option>)}
           </select>
 
+          {/* Aktif/Pasif filtre */}
+          <div className="flex bg-white rounded-xl border border-gray-200 p-1">
+            {[{ k: 'tumu', l: 'Tümü' }, { k: 'aktif', l: 'Aktif' }, { k: 'pasif', l: 'Pasif' }].map(f => (
+              <button key={f.k} onClick={() => { setAktifFiltre(f.k); setSayfa(1); }}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                style={aktifFiltre === f.k ? { background: '#6366F1', color: 'white' } : { color: '#94A3B8' }}>
+                {f.l}
+              </button>
+            ))}
+          </div>
+
           {/* Excel Yükle */}
           <button onClick={handleExcelAc}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border border-gray-200 bg-white text-gray-600 hover:bg-gray-50">
@@ -459,33 +488,57 @@ export default function UrunlerPage() {
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-1.5">
-              {urunler.map(u => (
+              {urunler.map(u => {
+                const pasif = u.aktif === 0 || u.aktif === false;
+                return (
                 <div key={u.id}
-                  className="bg-white rounded-lg px-3 py-2.5 border border-gray-100 hover:border-indigo-100 hover:bg-indigo-50/30 transition-all group flex items-center gap-2">
+                  className={`rounded-lg px-3 py-2.5 border transition-all group flex flex-col gap-1.5 ${pasif ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100 hover:border-indigo-100 hover:bg-indigo-50/30'}`}>
 
-                  {/* Bilgiler */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-800 truncate leading-tight">{u.urun_adi}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="text-xs text-gray-400">{u.birim || 'ADET'}</span>
-                      {!seciliIsletme && u.isletmeler?.ad && (
-                        <span className="text-xs font-medium px-1.5 py-0.5 rounded-md"
-                          style={{ background: '#F0FDF4', color: '#16A34A' }}>
-                          {u.isletmeler.ad}
-                        </span>
-                      )}
+                  <div className="flex items-center gap-2">
+                    {/* Bilgiler */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className={`text-sm font-semibold truncate leading-tight ${pasif ? 'text-red-400 line-through' : 'text-gray-800'}`}>{u.urun_adi}</p>
+                        {pasif && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                            style={{ background: '#FEE2E2', color: '#DC2626' }}>Silinmiş</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-xs text-gray-400">{u.birim || 'ADET'}</span>
+                        {!seciliIsletme && u.isletmeler?.ad && (
+                          <span className="text-xs font-medium px-1.5 py-0.5 rounded-md"
+                            style={{ background: '#F0FDF4', color: '#16A34A' }}>
+                            {u.isletmeler.ad}
+                          </span>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Düzenle (sadece aktif) */}
+                    {!pasif && (
+                      <button
+                        onClick={e => handleDuzenle(u, e)}
+                        className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
+                        style={{ background: '#EEF2FF' }}>
+                        <Pencil style={{ width: 11, height: 11, color: '#6366F1' }} />
+                      </button>
+                    )}
                   </div>
 
-                  {/* Düzenle */}
-                  <button
-                    onClick={e => handleDuzenle(u, e)}
-                    className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
-                    style={{ background: '#EEF2FF' }}>
-                    <Pencil style={{ width: 11, height: 11, color: '#6366F1' }} />
-                  </button>
+                  {/* Geri Al (pasif - tam genişlik alt kısım) */}
+                  {pasif && (
+                    <div className="border-t border-red-200 pt-1.5">
+                      <button onClick={e => { e.stopPropagation(); setGeriAlUrun(u); }}
+                        className="flex items-center justify-center gap-1 w-full py-1.5 rounded-lg text-xs font-semibold border border-green-200 hover:bg-green-100 text-green-600 transition-colors"
+                        style={{ background: '#DCFCE7' }}>
+                        <RotateCcw className="w-3 h-3" />Geri Al
+                      </button>
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Sayfalama */}
@@ -612,6 +665,42 @@ export default function UrunlerPage() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Geri Al Onay Modalı */}
+      {geriAlUrun && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
+          onClick={() => setGeriAlUrun(null)}>
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-6"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#DCFCE7' }}>
+                <RotateCcw className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900 text-sm">Ürünü Geri Al</p>
+                <p className="text-xs text-gray-400">Bu ürün tekrar aktif olacak</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 mb-5">
+              <span className="font-bold">{geriAlUrun.urun_adi}</span> geri alınacak. Devam etmek istiyor musunuz?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setGeriAlUrun(null)}
+                className="py-3 rounded-xl font-bold text-sm text-gray-500 transition-colors"
+                style={{ background: '#F3F4F6' }}>
+                Vazgeç
+              </button>
+              <button onClick={handleGeriAl}
+                className="py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-colors"
+                style={{ background: '#10B981' }}>
+                <RotateCcw className="w-4 h-4" />
+                Geri Al
+              </button>
+            </div>
           </div>
         </div>
       )}

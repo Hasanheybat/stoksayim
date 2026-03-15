@@ -122,7 +122,25 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// GET /api/roller/:id/atanmislar — Bu role atanmış kullanıcıları getir
+router.get('/:id/atanmislar', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT ki.id as ki_id, ki.kullanici_id, ki.isletme_id, k.ad_soyad, k.email, i.ad as isletme_ad
+       FROM kullanici_isletme ki
+       JOIN kullanicilar k ON ki.kullanici_id = k.id
+       JOIN isletmeler i ON ki.isletme_id = i.id
+       WHERE ki.rol_id = ? AND ki.aktif = 1`,
+      [req.params.id]
+    );
+    res.json(rows || []);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
 // DELETE /api/roller/:id — Rol sil (sadece özel roller)
+// Body: { atamalar: [{ ki_id, yeni_rol_id }] } — isteğe bağlı yeniden atama
 router.delete('/:id', async (req, res) => {
   try {
     // Sistem rolü olup olmadığını kontrol et
@@ -139,10 +157,33 @@ router.delete('/:id', async (req, res) => {
       return res.status(403).json({ hata: `"${rolRows[0].ad}" sistem rolü silinemez.` });
     }
 
-    // Bu role atanmış kullanici_isletme kayıtlarının rol_id'sini temizle
+    const atamalar = req.body?.atamalar || [];
+    const bosYetkiler = JSON.stringify({
+      urun:         { goruntule: false, ekle: false, duzenle: false, sil: false },
+      depo:         { goruntule: false, ekle: false, duzenle: false, sil: false },
+      sayim:        { goruntule: false, ekle: false, duzenle: false, sil: false },
+      toplam_sayim: { goruntule: false, ekle: false, duzenle: false, sil: false },
+    });
+
+    // Yeniden atama yapılanları işle
+    const atamaKiIds = [];
+    for (const atama of atamalar) {
+      if (!atama.ki_id || !atama.yeni_rol_id) continue;
+      atamaKiIds.push(atama.ki_id);
+      // Yeni rolün yetkilerini al
+      const [yeniRolRows] = await pool.execute('SELECT yetkiler FROM roller WHERE id = ?', [atama.yeni_rol_id]);
+      if (yeniRolRows.length) {
+        await pool.execute(
+          'UPDATE kullanici_isletme SET rol_id = ?, yetkiler = ? WHERE id = ?',
+          [atama.yeni_rol_id, yeniRolRows[0].yetkiler, atama.ki_id]
+        );
+      }
+    }
+
+    // Yeniden atama yapılmayan kullanıcıların yetkilerini sıfırla
     await pool.execute(
-      'UPDATE kullanici_isletme SET rol_id = NULL WHERE rol_id = ?',
-      [req.params.id]
+      'UPDATE kullanici_isletme SET rol_id = NULL, yetkiler = ? WHERE rol_id = ?',
+      [bosYetkiler, req.params.id]
     );
 
     await pool.execute(

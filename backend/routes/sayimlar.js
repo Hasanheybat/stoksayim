@@ -70,7 +70,11 @@ router.get('/', async (req, res) => {
   }
   if (depo_id) { where.push('s.depo_id = ?'); params.push(depo_id); }
   if (durum) { where.push('s.durum = ?'); params.push(durum); }
-  if (q) { where.push('s.ad LIKE ?'); params.push(`%${q}%`); }
+  if (q) {
+    const qClean = q.replace(/^#/, '');
+    where.push('(s.ad LIKE ? OR s.id LIKE ?)');
+    params.push(`%${q}%`, `${qClean}%`);
+  }
   if (toplama === '1') { where.push("s.notlar LIKE '%toplanan_sayimlar%'"); }
   if (toplama === '0') { where.push("(s.notlar IS NULL OR s.notlar NOT LIKE '%toplanan_sayimlar%')"); }
 
@@ -141,7 +145,7 @@ router.get('/:id', async (req, res) => {
   // 2. Kalemler
   const [kalemler] = await pool.execute(
     `SELECT sk.id, sk.miktar, sk.birim, sk.notlar, sk.created_at,
-       u.id AS urun_id, u.urun_kodu, u.urun_adi, u.isim_2, u.barkodlar, u.birim AS urun_birim
+       u.id AS urun_id, u.urun_kodu, u.urun_adi, u.isim_2, u.barkodlar, u.birim AS urun_birim, u.aktif AS urun_aktif
      FROM sayim_kalemleri sk
      LEFT JOIN isletme_urunler u ON u.id = sk.urun_id
      WHERE sk.sayim_id = ?
@@ -163,6 +167,7 @@ router.get('/:id', async (req, res) => {
       isletme_urunler: k.urun_id ? {
         id: k.urun_id, urun_kodu: k.urun_kodu, urun_adi: k.urun_adi,
         isim_2: k.isim_2, barkodlar: k.barkodlar, birim: k.urun_birim,
+        aktif: k.urun_aktif,
       } : null,
     })),
   };
@@ -213,6 +218,20 @@ router.delete('/:id', async (req, res) => {
 
   await pool.execute("UPDATE sayimlar SET durum = 'silindi' WHERE id = ?", [req.params.id]);
   res.json({ mesaj: 'Sayım silindi.' });
+});
+
+// PUT /api/sayimlar/:id/restore — Silinen sayımı geri al (admin only)
+router.put('/:id/restore', async (req, res) => {
+  if (req.user.rol !== 'admin') return res.status(403).json({ hata: 'Yalnızca admin bu işlemi yapabilir.' });
+  try {
+    const [rows] = await pool.execute('SELECT id, durum FROM sayimlar WHERE id = ?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+    if (rows[0].durum !== 'silindi') return res.status(400).json({ hata: 'Bu sayım silinmiş durumda değil.' });
+    await pool.execute("UPDATE sayimlar SET durum = 'devam' WHERE id = ?", [req.params.id]);
+    res.json({ mesaj: 'Sayım geri alındı.' });
+  } catch (err) {
+    return res.status(500).json({ hata: err.message });
+  }
 });
 
 // POST /api/sayimlar
@@ -351,7 +370,7 @@ router.get('/:id/kalemler', async (req, res) => {
 
   const [data] = await pool.execute(
     `SELECT sk.*,
-       u.id AS urun_id_j, u.urun_kodu, u.urun_adi, u.isim_2, u.barkodlar, u.birim AS urun_birim
+       u.id AS urun_id_j, u.urun_kodu, u.urun_adi, u.isim_2, u.barkodlar, u.birim AS urun_birim, u.aktif AS urun_aktif
      FROM sayim_kalemleri sk
      LEFT JOIN isletme_urunler u ON u.id = sk.urun_id
      WHERE sk.sayim_id = ?
@@ -365,6 +384,7 @@ router.get('/:id/kalemler', async (req, res) => {
     isletme_urunler: row.urun_id_j ? {
       id: row.urun_id_j, urun_kodu: row.urun_kodu, urun_adi: row.urun_adi,
       isim_2: row.isim_2, barkodlar: row.barkodlar, birim: row.urun_birim,
+      aktif: row.urun_aktif,
     } : null,
   }));
 

@@ -107,13 +107,150 @@ function Avatar({ ad }) {
   );
 }
 
+/* ── Rol Silme Modalı ── */
+function RolSilModal({ rol, tumRoller, onClose, onConfirm }) {
+  const [atanmislar, setAtanmislar] = useState([]);
+  const [yukleniyor, setYukleniyor] = useState(true);
+  const [siliyor, setSiliyor]       = useState(false);
+  // { ki_id: yeni_rol_id } mapping
+  const [atamalar, setAtamalar]     = useState({});
+
+  useEffect(() => {
+    api.get(`/roller/${rol.id}/atanmislar`)
+      .then(r => setAtanmislar(r.data || []))
+      .catch(() => toast.error('Atanmış kullanıcılar yüklenemedi.'))
+      .finally(() => setYukleniyor(false));
+  }, [rol.id]);
+
+  const digerRoller = tumRoller.filter(r => r.id !== rol.id && !r._admin);
+
+  const handleSil = async () => {
+    setSiliyor(true);
+    try {
+      const atamaList = Object.entries(atamalar)
+        .filter(([, v]) => v)
+        .map(([ki_id, yeni_rol_id]) => ({ ki_id, yeni_rol_id }));
+      await api.delete(`/roller/${rol.id}`, { data: { atamalar: atamaList } });
+      toast.success(`"${rol.ad}" rolü silindi.`);
+      onConfirm(rol.id);
+    } catch (err) {
+      toast.error(err.response?.data?.hata || 'Silinemedi.');
+    } finally { setSiliyor(false); }
+  };
+
+  const atamasizSayisi = atanmislar.filter(a => !atamalar[a.ki_id]).length;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col justify-end sm:items-center sm:justify-center"
+      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="w-10 h-1 rounded-full bg-gray-200" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#FEF2F2' }}>
+            <Trash2 className="w-5 h-5 text-red-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-gray-900 text-sm">Rolü Sil: {rol.ad}</p>
+            <p className="text-xs text-gray-400">Bu rol kalıcı olarak silinecek</p>
+          </div>
+          <button onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-100 text-gray-500 flex-shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* İçerik */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {yukleniyor ? (
+            <div className="space-y-3">
+              {[1, 2].map(i => <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />)}
+            </div>
+          ) : atanmislar.length === 0 ? (
+            <div className="rounded-xl p-4 text-center" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+              <p className="text-sm text-emerald-700 font-medium">Bu role atanmış kullanıcı yok.</p>
+              <p className="text-xs text-emerald-500 mt-1">Rol güvenle silinebilir.</p>
+            </div>
+          ) : (
+            <>
+              {/* Uyarı */}
+              <div className="rounded-xl p-3.5 flex items-start gap-3"
+                style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#D97706' }} />
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  Bu role <strong>{atanmislar.length}</strong> kullanıcı atanmış. Yeni bir rol seçmezseniz tüm yetkileri kaldırılacak.
+                </p>
+              </div>
+
+              {/* Kullanıcı listesi */}
+              <div className="space-y-2">
+                {atanmislar.map(a => (
+                  <div key={a.ki_id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50">
+                    <Avatar ad={a.ad_soyad} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{a.ad_soyad}</p>
+                      <p className="text-[10px] text-gray-400 truncate">{a.isletme_ad}</p>
+                    </div>
+                    <select
+                      value={atamalar[a.ki_id] || ''}
+                      onChange={e => setAtamalar(prev => ({ ...prev, [a.ki_id]: e.target.value }))}
+                      className="text-xs font-medium px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white outline-none focus:border-indigo-400 min-w-[130px]"
+                    >
+                      <option value="">Rol seçilmedi</option>
+                      {digerRoller.map(r => (
+                        <option key={r.id} value={r.id}>{r.ad}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              {/* Atamasız uyarısı */}
+              {atamasizSayisi > 0 && (
+                <div className="rounded-xl p-3 flex items-start gap-2.5"
+                  style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}>
+                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-red-400" />
+                  <p className="text-xs text-red-600">
+                    <strong>{atamasizSayisi}</strong> kullanıcının tüm yetkileri kaldırılacak.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="grid grid-cols-2 gap-3 px-5 py-4 border-t border-gray-100">
+          <button onClick={onClose}
+            className="py-3 rounded-xl font-bold text-sm text-gray-500 transition-colors"
+            style={{ background: '#F3F4F6' }}>
+            Vazgeç
+          </button>
+          <button onClick={handleSil} disabled={siliyor || yukleniyor}
+            className="py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-colors disabled:opacity-60"
+            style={{ background: '#EF4444' }}>
+            {siliyor
+              ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              : <Trash2 className="w-4 h-4" />}
+            Sil
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Rol Detay Modalı ── */
-function RolDetayModal({ rol, kullanicilar, onClose, onSave, onDelete }) {
+function RolDetayModal({ rol, kullanicilar, tumRoller, onClose, onSave, onDelete }) {
   const [yetkiler,  setYetkiler]  = useState(rol.yetkiler || {});
   const [degisti,   setDegisti]   = useState(false);
   const [kayit,     setKayit]     = useState(false);
-  const [siliyor,   setSiliyor]   = useState(false);
-  const [silOnay,   setSilOnay]   = useState(false);
+  const [silModal,  setSilModal]  = useState(false);
 
   useEffect(() => { setYetkiler(rol.yetkiler || {}); setDegisti(false); }, [rol]);
 
@@ -129,17 +266,6 @@ function RolDetayModal({ rol, kullanicilar, onClose, onSave, onDelete }) {
       setDegisti(false);
     } catch { toast.error('Kayıt başarısız.'); }
     finally { setKayit(false); }
-  };
-
-  const handleSil = async () => {
-    setSiliyor(true);
-    try {
-      await api.delete(`/roller/${rol.id}`);
-      toast.success(`"${rol.ad}" rolü silindi.`);
-      onDelete(rol.id);
-      onClose();
-    } catch (err) { toast.error(err.response?.data?.hata || 'Silinemedi.'); }
-    finally { setSiliyor(false); setSilOnay(false); }
   };
 
   const handleReset = () => {
@@ -197,28 +323,11 @@ function RolDetayModal({ rol, kullanicilar, onClose, onSave, onDelete }) {
           </div>
           {/* Silme — özel rol */}
           {!rol.sistem && !isAdminRol && (
-            silOnay ? (
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <button onClick={() => setSilOnay(false)}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-500">
-                  Vazgeç
-                </button>
-                <button onClick={handleSil} disabled={siliyor}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-white flex items-center gap-1"
-                  style={{ background: '#EF4444' }}>
-                  {siliyor
-                    ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : null}
-                  Sil
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setSilOnay(true)}
-                className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-red-50 transition-colors flex-shrink-0"
-                title="Rolü sil">
-                <Trash2 className="w-4 h-4 text-red-400" />
-              </button>
-            )
+            <button onClick={() => setSilModal(true)}
+              className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-red-50 transition-colors flex-shrink-0"
+              title="Rolü sil">
+              <Trash2 className="w-4 h-4 text-red-400" />
+            </button>
           )}
           {/* Admin kilit */}
           {isAdminRol && (
@@ -335,6 +444,16 @@ function RolDetayModal({ rol, kullanicilar, onClose, onSave, onDelete }) {
           </div>
         )}
       </div>
+
+      {/* Rol Silme Modalı */}
+      {silModal && (
+        <RolSilModal
+          rol={rol}
+          tumRoller={tumRoller}
+          onClose={() => setSilModal(false)}
+          onConfirm={(id) => { setSilModal(false); onDelete(id); onClose(); }}
+        />
+      )}
     </div>
   );
 }
@@ -588,6 +707,7 @@ export default function RollerPage() {
         <RolDetayModal
           rol={seciliRol}
           kullanicilar={kullanicilar}
+          tumRoller={tumRoller}
           onClose={() => setSeciliRol(null)}
           onSave={(updated) => { handleSave(updated); setSeciliRol(updated); }}
           onDelete={(id) => { handleDelete(id); setSeciliRol(null); }}

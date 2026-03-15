@@ -159,4 +159,17 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// PUT /api/isletmeler/:id/restore — Silinen işletmeyi geri al
+router.put('/:id/restore', async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT id, aktif FROM isletmeler WHERE id = ?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ hata: 'İşletme bulunamadı.' });
+    if (rows[0].aktif === 1) return res.status(400).json({ hata: 'Bu işletme zaten aktif.' });
+    await pool.execute('UPDATE isletmeler SET aktif = 1 WHERE id = ?', [req.params.id]);
+    res.json({ mesaj: 'İşletme geri alındı.' });
+  } catch (err) {
+    return res.status(500).json({ hata: err.message });
+  }
+});
+
 module.exports = router;
