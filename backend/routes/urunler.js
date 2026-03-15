@@ -114,14 +114,15 @@ router.put('/:id', async (req, res) => {
         son_guncelleme = NOW(), guncelleme_kaynagi = 'kullanici',
         kullanici_guncelledi = 1, guncelleyen_kullanici_id = ?
       WHERE id = ?`,
-      [urun_adi.trim(), urun_kodu.trim(), (isim_2 || '').trim(), barkodStr, birim, req.user.id, req.params.id]
+      [urun_adi.trim(), urun_kodu.trim(), (isim_2 || '').trim(), barkodStr, birim || null, req.user.id, req.params.id]
     );
     const [rows] = await pool.execute('SELECT * FROM isletme_urunler WHERE id = ?', [req.params.id]);
     if (!rows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
     res.json(rows[0]);
   } catch (err) {
     console.error('[PUT /urunler/:id]', err.message);
-    return res.status(500).json({ hata: err.message });
+    console.error('[urunler]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -157,7 +158,8 @@ router.post('/', yetkiGuard('urun', 'ekle', 'body'), async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     if (err.errno === 1062) return res.status(409).json({ hata: 'Bu ürün kodu bu işletmede zaten var.' });
-    return res.status(500).json({ hata: err.message });
+    console.error('[urunler]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -169,7 +171,8 @@ router.delete('/:id', async (req, res) => {
     await pool.execute('UPDATE isletme_urunler SET aktif = 0 WHERE id = ?', [req.params.id]);
     res.json({ mesaj: 'Ürün silindi.' });
   } catch (err) {
-    return res.status(500).json({ hata: err.message });
+    console.error('[urunler]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -182,7 +185,8 @@ router.put('/:id/restore', adminGuard, async (req, res) => {
     await pool.execute('UPDATE isletme_urunler SET aktif = 1, son_guncelleme = NOW() WHERE id = ?', [req.params.id]);
     res.json({ mesaj: 'Ürün geri alındı.' });
   } catch (err) {
-    return res.status(500).json({ hata: err.message });
+    console.error('[urunler]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 

@@ -37,7 +37,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { sub: kullanici.id, email: kullanici.email, rol: kullanici.rol },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
 
     // password_hash'i yanıttan çıkar
@@ -46,7 +46,7 @@ router.post('/login', async (req, res) => {
     res.json({ token, kullanici: kullaniciData });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ hata: 'Sunucu hatası.', error: err.message });
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 

@@ -230,7 +230,8 @@ router.put('/:id/restore', async (req, res) => {
     await pool.execute("UPDATE sayimlar SET durum = 'devam' WHERE id = ?", [req.params.id]);
     res.json({ mesaj: 'Sayım geri alındı.' });
   } catch (err) {
-    return res.status(500).json({ hata: err.message });
+    console.error('[sayimlar]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -252,7 +253,8 @@ router.post('/', yetkiGuard('sayim', 'ekle', 'body'), async (req, res) => {
     const [rows] = await pool.execute('SELECT * FROM sayimlar WHERE id = ?', [id]);
     res.status(201).json(rows[0]);
   } catch (err) {
-    return res.status(500).json({ hata: err.message });
+    console.error('[sayimlar]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -311,7 +313,8 @@ router.put('/:id', async (req, res) => {
     const [rows] = await pool.execute('SELECT * FROM sayimlar WHERE id = ?', [req.params.id]);
     res.json(rows[0]);
   } catch (err) {
-    return res.status(500).json({ hata: err.message });
+    console.error('[sayimlar]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -408,6 +411,8 @@ router.post('/:id/kalem', async (req, res) => {
   if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
   const sayim = sayimRows[0];
 
+  if (!await checkSayimYetki(sayim, req, res, 'duzenle')) return;
+
   if (sayim.durum !== 'devam') {
     return res.status(400).json({ hata: 'Tamamlanmış sayıma kalem eklenemez.' });
   }
@@ -437,7 +442,8 @@ router.post('/:id/kalem', async (req, res) => {
       } : null,
     });
   } catch (err) {
-    return res.status(500).json({ hata: err.message });
+    console.error('[sayimlar]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -451,6 +457,8 @@ router.put('/:id/kalem/:kalem_id', async (req, res) => {
   );
   if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
   const sayim = { ...sayimRows[0], notlar: sayimRows[0].notlar_json };
+
+  if (!await checkSayimYetki(sayim, req, res, 'duzenle')) return;
 
   if (sayim.durum !== 'devam') return res.status(400).json({ hata: 'Tamamlanmış sayım düzenlenemez.' });
 
@@ -480,6 +488,8 @@ router.delete('/:id/kalem/:kalem_id', async (req, res) => {
   );
   if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
   const sayim = sayimRows[0];
+
+  if (!await checkSayimYetki(sayim, req, res, 'duzenle')) return;
 
   if (sayim.durum !== 'devam') return res.status(400).json({ hata: 'Tamamlanmış sayımdan kalem silinemez.' });
 
@@ -573,7 +583,8 @@ router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, re
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('Sayım toplama hatası:', err);
-    return res.status(500).json({ hata: err.message });
+    console.error('[sayimlar]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 

@@ -17,7 +17,8 @@ router.get('/isletmelerim', async (req, res) => {
 
     res.json(rows || []);
   } catch (err) {
-    return res.status(500).json({ hata: err.message });
+    console.error('[profil]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 

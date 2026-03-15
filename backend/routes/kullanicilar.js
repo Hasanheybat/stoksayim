@@ -108,7 +108,8 @@ router.get('/', async (req, res) => {
     if (sayfa) return res.json({ data: list, toplam });
     res.json(list);
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[kullanicilar]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -144,7 +145,8 @@ router.get('/:id', async (req, res) => {
 
     res.json(kullanici);
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[kullanicilar]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -175,7 +177,8 @@ router.post('/', async (req, res) => {
     if (err.errno === 1062) {
       return res.status(409).json({ hata: 'Bu email zaten kullanımda.' });
     }
-    res.status(500).json({ hata: err.message });
+    console.error('[kullanicilar]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -234,7 +237,8 @@ router.put('/:id', async (req, res) => {
     if (err.errno === 1062) {
       return res.status(409).json({ hata: 'Bu email zaten kullanımda.' });
     }
-    res.status(500).json({ hata: err.message });
+    console.error('[kullanicilar]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -252,7 +256,8 @@ router.delete('/:id', async (req, res) => {
 
     res.json({ mesaj: 'Kullanıcı pasife alındı.' });
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[kullanicilar]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -289,7 +294,8 @@ router.post('/:id/isletme', async (req, res) => {
 
     res.status(201).json(rows[0]);
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[kullanicilar]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -303,7 +309,8 @@ router.delete('/:id/isletme/:isletme_id', async (req, res) => {
 
     res.json({ mesaj: 'İşletme ataması kaldırıldı.' });
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[kullanicilar]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -334,7 +341,8 @@ router.get('/:id/yetkiler', async (req, res) => {
       rol_adi:  rows[0].rol_adi || null,
     });
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[kullanicilar]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -373,7 +381,8 @@ router.put('/:id/yetkiler', async (req, res) => {
 
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[kullanicilar]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 

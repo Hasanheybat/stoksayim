@@ -25,7 +25,7 @@ const NAV_LINKS = [
   { icon: Settings,     grad: GRAD.gray,   label: 'Ayarlar',     to: '/admin/ayarlar'     },
 ];
 
-function Clock() {
+function useClock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
   const gun = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'][now.getDay()];
@@ -39,7 +39,7 @@ export default function AdminLayout() {
   const navigate  = useNavigate();
   const location  = useLocation();
   const { kullanici, cikisYap } = useAuthStoreAdm();
-  const { saat, tarih, gun } = Clock();
+  const { saat, tarih, gun } = useClock();
   const anaSayfa = location.pathname === '/admin' || location.pathname === '/admin/';
 
   const handleCikis = async () => { await cikisYap(); navigate('/login'); };

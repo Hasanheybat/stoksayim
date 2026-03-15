@@ -11,8 +11,8 @@ export default function AdminAyarlarPage() {
   const [email, setEmail]           = useState('');
   const [emailYukleniyor, setEmailY] = useState(false);
 
-  const [sifreGuncelle, setSifreG]  = useState({ yeni: '', tekrar: '' });
-  const [sifreGoster, setSifreGoster] = useState({ yeni: false, tekrar: false });
+  const [sifreGuncelle, setSifreG]  = useState({ eski: '', yeni: '', tekrar: '' });
+  const [sifreGoster, setSifreGoster] = useState({ eski: false, yeni: false, tekrar: false });
   const [sifreYukleniyor, setSifreY]  = useState(false);
 
   const handleEmailGuncelle = async (e) => {
@@ -32,7 +32,7 @@ export default function AdminAyarlarPage() {
 
   const handleSifreGuncelle = async (e) => {
     e.preventDefault();
-    if (!sifreGuncelle.yeni || !sifreGuncelle.tekrar) return;
+    if (!sifreGuncelle.eski || !sifreGuncelle.yeni || !sifreGuncelle.tekrar) return;
     if (sifreGuncelle.yeni !== sifreGuncelle.tekrar) {
       toast.error('Şifreler eşleşmiyor.');
       return;
@@ -43,9 +43,9 @@ export default function AdminAyarlarPage() {
     }
     setSifreY(true);
     try {
-      await apiAdm.put('/auth/update-password', { eskiSifre: '', yeniSifre: sifreGuncelle.yeni });
+      await apiAdm.put('/auth/update-password', { eskiSifre: sifreGuncelle.eski, yeniSifre: sifreGuncelle.yeni });
       toast.success('Şifre güncellendi.');
-      setSifreG({ yeni: '', tekrar: '' });
+      setSifreG({ eski: '', yeni: '', tekrar: '' });
     } catch (err) {
       toast.error(err.response?.data?.hata || 'Şifre güncellenemedi.');
     } finally {
@@ -132,6 +132,7 @@ export default function AdminAyarlarPage() {
           </div>
           <form onSubmit={handleSifreGuncelle} className="p-3 space-y-2">
             {[
+              { key: 'eski',   label: 'Mevcut Şifre',  placeholder: 'Mevcut şifrenizi girin' },
               { key: 'yeni',   label: 'Yeni Şifre',    placeholder: 'En az 6 karakter' },
               { key: 'tekrar', label: 'Tekrar',         placeholder: 'Şifreyi tekrar girin' },
             ].map(({ key, label, placeholder }) => (
@@ -157,7 +158,7 @@ export default function AdminAyarlarPage() {
               <p className="text-[10px] text-red-500 font-medium">Şifreler eşleşmiyor</p>
             )}
             <button type="submit"
-              disabled={sifreYukleniyor || !sifreGuncelle.yeni || !sifreGuncelle.tekrar}
+              disabled={sifreYukleniyor || !sifreGuncelle.eski || !sifreGuncelle.yeni || !sifreGuncelle.tekrar}
               className="w-full py-1.5 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-opacity disabled:opacity-50"
               style={{ background: 'linear-gradient(135deg,#6366F1,#8B5CF6)' }}>
               {sifreYukleniyor

@@ -1,4 +1,11 @@
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+
+// JWT Secret başlangıç kontrolü — secret yoksa sunucu başlamasın
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  console.error('FATAL: JWT_SECRET env değişkeni tanımlı değil veya 32 karakterden kısa. Sunucu başlatılamıyor.');
+  process.exit(1);
+}
+
 const express    = require('express');
 const cors       = require('cors');
 const helmet     = require('helmet');
@@ -6,6 +13,9 @@ const rateLimit  = require('express-rate-limit');
 
 const path = require('path');
 const app = express();
+
+// Reverse proxy (Nginx) arkasında gerçek kullanıcı IP'sini al
+app.set('trust proxy', 1);
 
 // Güvenlik başlıkları (XSS, clickjacking, MIME sniffing vb.)
 app.use(helmet({ contentSecurityPolicy: false })); // CSP frontend ile çakışabileceğinden kapalı
@@ -29,7 +39,7 @@ app.use(express.json());
 // Rate limiting — brute-force ve DoS koruması
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,  // 15 dakika
-  max: 300,                   // IP başına 15 dk'da max 300 istek
+  max: 1500,                  // IP başına 15 dk'da max 1500 istek (20 kullanıcı × dakikada 10 ürün taraması)
   standardHeaders: true,
   legacyHeaders: false,
   message: { hata: 'Çok fazla istek gönderildi. Lütfen 15 dakika sonra tekrar deneyin.' },

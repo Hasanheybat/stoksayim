@@ -1,0 +1,150 @@
+# StokSay Guvenlik Raporu
+
+**Son Tarama:** 2026-03-15
+**Kapsam:** Backend API + Admin Paneli (Web)
+
+---
+
+## Mevcut Guvenlik Onlemleri (Aktif)
+
+| Onlem | Durum | Detay |
+|-------|-------|-------|
+| SQL Injection korumasi | OK | Tum sorgular parametreli prepared statement |
+| JWT dogrulama | OK | Token imza, sure, manipulasyon kontrolleri |
+| "none" algorithm saldirisi | OK | Reddediliyor |
+| IDOR korumasi | OK | Tum endpoint'lerde sahiplik + yetki kontrolu |
+| Hata mesaji sizintisi | OK | err.message kullaniciya gosterilmiyor, loglaniyor |
+| Rate limiting | OK | API: 1500 istek/15dk, Login: 20 deneme/15dk |
+| CORS | OK | Whitelist tabanli, bilinmeyen origin reddediliyor |
+| Helmet.js | OK | X-Content-Type-Options, HSTS, X-Frame-Options, Referrer-Policy |
+| X-Powered-By | OK | Kaldirildi (Helmet) |
+| password_hash gizliligi | OK | Hicbir API response'da donmuyor |
+| Path traversal | OK | `../../etc/passwd` gibi denemeler 404 donuyor |
+| Admin self-protection | OK | Admin kendini silemez/pasif yapamaz |
+| JWT startup kontrolu | OK | JWT_SECRET 32 karakterden kisaysa sunucu baslamiyor |
+| Soft delete | OK | Veriler gercekten silinmiyor, `aktif=0` yapiliyor |
+| bcrypt | OK | 10 round salt ile sifre hash'leme |
+
+---
+
+## Bilinen Aciklar
+
+### KRITIK
+
+#### K1 — JWT Token localStorage'da Tutuluyor
+
+- **Dosya:** `frontend/src/store/authStoreAdm.js` satir 15, `frontend/src/lib/apiAdm.js` satir 7
+- **Risk:** XSS saldirisi ile token calinabilir. `localStorage.getItem('stoksay-adm-token')` herhangi bir JS kodu ile okunabilir.
+- **Etki:** Admin token ele gecirilirse tum sisteme erisim saglanir.
+- **Cozum:** httpOnly cookie ile token yonetimi. Backend `Set-Cookie` ile token gonderir, frontend `withCredentials: true` kullanir.
+- **Deploy'da duzeltilecek:** HAYIR — Mimari degisiklik gerektirir. Ayri sprint'te planlanmali.
+
+---
+
+### YUKSEK
+
+#### Y1 — xlsx (SheetJS) Paketi — Prototype Pollution + ReDoS
+
+- **Dosya:** `frontend/package.json` satir 38
+- **Risk:** Kullanici yukledigi Excel dosyasi uzerinden prototype pollution saldirisi. `UrunlerPage.jsx`'te Excel upload islemi bu paketten geciyor.
+- **Etki:** Zararli Excel dosyasi ile client-side kod calistirma.
+- **Cozum:** `xlsx` yerine `exceljs` paketine gecis veya SheetJS Pro kullanimi.
+- **Deploy'da duzeltilecek:** HAYIR — Paket degisikligi ve test gerektirir.
+
+#### Y2 — Client-Side Rol Kontrolu Bypass Edilebilir
+
+- **Dosya:** `frontend/src/components/ui/ProtectedRoute.jsx` satir 14-15, `frontend/src/store/authStoreAdm.js` satir 40-43
+- **Risk:** localStorage'daki `stoksay-adm-auth` verisinde `rol: 'admin'` yapilarak ProtectedRoute gecilir. Zustand persist middleware auth state'i localStorage'da tutuyor.
+- **Gercek etki:** DUSUK — Backend tum admin endpoint'lerde `adminGuard` ile rol kontrolu yapiyor. Client-side bypass sadece bos sayfa goruntulemeye yarar, veri okunamaz/yazilamaz.
+- **Cozum:** Auth state persist etmemek veya her sayfa yuklemesinde `/auth/me` ile dogrulamak.
+- **Deploy'da duzeltilecek:** HAYIR — Backend zaten koruyor. Iyilestirme olarak planlanabilir.
+
+#### Y3 — CSRF Korumasi Yok
+
+- **Risk:** Klasik CSRF saldirisi. Ancak token localStorage'da (cookie degil) oldugu icin standart CSRF calismaz.
+- **Gercek etki:** DUSUK — localStorage token cookie gibi otomatik gonderilmez.
+- **Cozum:** Cookie tabanli auth'a gecildiginde SameSite=Strict + CSRF token eklenmeli.
+- **Deploy'da duzeltilecek:** HAYIR — Simdilik risk yok, cookie gecisinde uygulanacak.
+
+---
+
+### ORTA
+
+#### O1 — Backend Hata Mesajlari Raw Gosteriliyor (Frontend)
+
+- **Dosyalar:** `LoginPage.jsx`, `IsletmelerPage.jsx`, `AyarlarPage.jsx`, `KullanicilarPage.jsx`, `UrunlerPage.jsx`, `RollerPage.jsx`
+- **Risk:** `toast.error(err.response?.data?.hata || ...)` ile backend hata mesajlari dogrudan gosteriliyor.
+- **Gercek etki:** DUSUK — Backend zaten `'Sunucu hatasi.'` gibi genel mesajlar donduruyor, stack trace sizmiyor.
+- **Deploy'da duzeltilecek:** HAYIR — Backend zaten temizlenmis durumda.
+
+#### O2 — dangerouslySetInnerHTML Kullanimi
+
+- **Dosya:** `frontend/src/components/ui/chart.tsx` satir 83
+- **Risk:** Statik THEMES objesinden CSS enjekte ediliyor. Su an guvenli ama kaynak degisirse risk olusur.
+- **Deploy'da duzeltilecek:** HAYIR — Dusuk oncelik, statik veri.
+
+#### O3 — esbuild/vite Dev Server Acigi
+
+- **Dosya:** `frontend/package.json` (vite, esbuild)
+- **Risk:** Dev sunucusu uzerinden herhangi bir site istek gonderip yanit okuyabilir.
+- **Gercek etki:** YOK — Sadece development ortamini etkiler, production build'i etkilemez.
+- **Cozum:** `vite` paketini v6.2+ veya v8.x'e guncellemek.
+- **Deploy'da duzeltilecek:** EVET — `npm update vite` ile guncellenecek.
+
+#### O4 — Form Input Dogrulama Eksik
+
+- **Dosyalar:** Tum admin panel form sayfalari
+- **Risk:** `maxLength`, `pattern` gibi HTML dogrulama yok. Sifre minimum uzunluk 6 karakter.
+- **Gercek etki:** DUSUK — Backend dogrulama yapiyor, client-side sadece UX iyilestirmesi.
+- **Deploy'da duzeltilecek:** HAYIR — Iyilestirme olarak planlanabilir.
+
+#### O5 — .env.example Eski Supabase Referanslari
+
+- **Dosya:** `frontend/.env.example`
+- **Risk:** Eski Supabase degiskenleri kafa karistirabilir.
+- **Deploy'da duzeltilecek:** EVET — Dosya temizlenecek veya silinecek.
+
+---
+
+### DUSUK
+
+#### D1 — Login Formunda Client-Side Rate Limit Yok
+
+- **Risk:** Kullanici surekli deneme yapabilir (backend rate limit var ama client UX'i iyilestirmez).
+- **Deploy'da duzeltilecek:** HAYIR — Backend zaten koruyor.
+
+#### D2 — 401 Olmayan Hatalarda Token Temizlenmiyor
+
+- **Dosya:** `frontend/src/store/authStoreAdm.js` satir 25-31
+- **Risk:** Network hatasi durumunda eski oturum kalabilir.
+- **Deploy'da duzeltilecek:** HAYIR — Edge case, dusuk oncelik.
+
+---
+
+## Deploy Oncesi Kontrol Listesi
+
+- [ ] `npm update vite` — Dev server acigini kapat (O3)
+- [ ] `frontend/.env.example` temizle — Supabase referanslarini kaldir (O5)
+- [ ] `JWT_SECRET` uretim ortaminda en az 64 karakter olmali
+- [ ] `ALLOWED_ORIGINS` sadece uretim domainlerini icermeli
+- [ ] `NODE_ENV=production` ayarlanmali
+- [ ] PM2 ile baslatilmali (`pm2 start index.js --name stoksay`)
+
+---
+
+## Test Sonuclari (2026-03-15)
+
+| Kategori | Sonuc |
+|----------|-------|
+| Auth guvenlik (login, token, JWT) | 8/8 PASS |
+| SQL Injection (login, query param, UNION) | 6/6 PASS |
+| IDOR (kaynak erisim, kalem endpoint) | 4/4 PASS |
+| Error message leakage | 3/3 PASS |
+| XSS input handling | 3/3 PASS |
+| Rate limiting (login, API) | 2/2 PASS |
+| CORS (whitelist, reject) | 2/2 PASS |
+| Helmet headers | 7/7 PASS |
+| JWT manipulation (tamper, none alg, empty sig) | 3/3 PASS |
+| Path traversal | 1/1 PASS |
+| Long input / edge cases | 4/4 PASS |
+| **TOPLAM** | **52/52 PASS** |

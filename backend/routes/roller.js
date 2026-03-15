@@ -16,7 +16,8 @@ router.get('/', async (req, res) => {
 
     res.json(rows || []);
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[roller]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -53,7 +54,8 @@ router.post('/', async (req, res) => {
     if (err.errno === 1062) {
       return res.status(409).json({ hata: 'Bu rol adı zaten mevcut.' });
     }
-    res.status(500).json({ hata: err.message });
+    console.error('[roller]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -118,7 +120,8 @@ router.put('/:id', async (req, res) => {
     if (err.errno === 1062) {
       return res.status(409).json({ hata: 'Bu rol adı zaten mevcut.' });
     }
-    res.status(500).json({ hata: err.message });
+    console.error('[roller]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -135,7 +138,8 @@ router.get('/:id/atanmislar', async (req, res) => {
     );
     res.json(rows || []);
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[roller]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -193,7 +197,8 @@ router.delete('/:id', async (req, res) => {
 
     res.json({ mesaj: 'Rol silindi.' });
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[roller]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 

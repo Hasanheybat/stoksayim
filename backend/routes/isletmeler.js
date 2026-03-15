@@ -53,7 +53,8 @@ router.get('/', async (req, res) => {
 
     res.json(data);
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[isletmeler]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -71,7 +72,8 @@ router.get('/:id', async (req, res) => {
 
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[isletmeler]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -101,7 +103,8 @@ router.post('/', async (req, res) => {
     if (err.errno === 1062) {
       return res.status(409).json({ hata: 'Bu kod zaten kullanımda.' });
     }
-    res.status(500).json({ hata: err.message });
+    console.error('[isletmeler]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -141,7 +144,8 @@ router.put('/:id', async (req, res) => {
 
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[isletmeler]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -155,7 +159,8 @@ router.delete('/:id', async (req, res) => {
 
     res.json({ mesaj: 'İşletme pasife alındı.' });
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[isletmeler]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 

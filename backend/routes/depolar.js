@@ -59,7 +59,8 @@ router.post('/', yetkiGuard('depo', 'ekle', 'body'), async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     if (err.errno === 1062) return res.status(409).json({ hata: 'Bu depo bu işletmede zaten var.' });
-    return res.status(500).json({ hata: err.message });
+    console.error('[depolar]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -91,7 +92,8 @@ router.put('/:id', async (req, res) => {
     if (!rows.length) return res.status(404).json({ hata: 'Depo bulunamadı.' });
     res.json(rows[0]);
   } catch (err) {
-    return res.status(500).json({ hata: err.message });
+    console.error('[depolar]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -103,7 +105,8 @@ router.delete('/:id', async (req, res) => {
     await pool.execute('UPDATE depolar SET aktif = 0 WHERE id = ?', [req.params.id]);
     res.json({ mesaj: 'Depo silindi.' });
   } catch (err) {
-    return res.status(500).json({ hata: err.message });
+    console.error('[depolar]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -116,7 +119,8 @@ router.put('/:id/restore', adminGuard, async (req, res) => {
     await pool.execute('UPDATE depolar SET aktif = 1 WHERE id = ?', [req.params.id]);
     res.json({ mesaj: 'Depo geri alındı.' });
   } catch (err) {
-    return res.status(500).json({ hata: err.message });
+    console.error('[depolar]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -266,7 +270,8 @@ router.post('/', async (req, res) => {
     if (err.errno === 1062) {
       return res.status(409).json({ hata: 'Bu depo kodu bu işletmede zaten var.' });
     }
-    return res.status(500).json({ hata: err.message });
+    console.error('[depolar]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
