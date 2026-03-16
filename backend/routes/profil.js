@@ -61,7 +61,8 @@ router.get('/stats', async (req, res) => {
 
     res.json({ sayimlar: sayimCount || 0, urunler: urunCount, depolar: depoCount });
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[profil]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
@@ -77,7 +78,8 @@ router.put('/ayarlar', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ hata: err.message });
+    console.error('[profil]', err.message);
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 

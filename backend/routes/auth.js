@@ -10,7 +10,7 @@ router.post('/login', async (req, res) => {
   const pass = password || sifre;
 
   if (!email || !pass) {
-    return res.status(400).json({ error: 'Email ve şifre zorunludur.' });
+    return res.status(400).json({ hata: 'Email ve şifre zorunludur.' });
   }
 
   try {
@@ -75,35 +75,35 @@ router.get('/me', authGuard, async (req, res) => {
 // PUT /api/auth/update-email — admin email güncelle
 router.put('/update-email', authGuard, async (req, res) => {
   const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email zorunludur.' });
+  if (!email) return res.status(400).json({ hata: 'Email zorunludur.' });
 
   try {
     await pool.execute('UPDATE kullanicilar SET email = ? WHERE id = ?', [email.trim(), req.user.id]);
     res.json({ ok: true });
   } catch (err) {
-    if (err.errno === 1062) return res.status(409).json({ error: 'Bu email zaten kullanılıyor.' });
-    res.status(500).json({ error: 'Sunucu hatası.' });
+    if (err.errno === 1062) return res.status(409).json({ hata: 'Bu email zaten kullanılıyor.' });
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 
 // PUT /api/auth/update-password — şifre güncelle
 router.put('/update-password', authGuard, async (req, res) => {
   const { eskiSifre, yeniSifre } = req.body;
-  if (!eskiSifre || !yeniSifre) return res.status(400).json({ error: 'Eski ve yeni şifre zorunludur.' });
-  if (yeniSifre.length < 6) return res.status(400).json({ error: 'Yeni şifre en az 6 karakter olmalıdır.' });
+  if (!eskiSifre || !yeniSifre) return res.status(400).json({ hata: 'Eski ve yeni şifre zorunludur.' });
+  if (yeniSifre.length < 6) return res.status(400).json({ hata: 'Yeni şifre en az 6 karakter olmalıdır.' });
 
   try {
     const [rows] = await pool.execute('SELECT password_hash FROM kullanicilar WHERE id = ?', [req.user.id]);
-    if (!rows.length) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    if (!rows.length) return res.status(404).json({ hata: 'Kullanıcı bulunamadı.' });
 
     const eslesme = await bcrypt.compare(eskiSifre, rows[0].password_hash);
-    if (!eslesme) return res.status(401).json({ error: 'Mevcut şifre hatalı.' });
+    if (!eslesme) return res.status(401).json({ hata: 'Mevcut şifre hatalı.' });
 
     const hash = await bcrypt.hash(yeniSifre, 10);
     await pool.execute('UPDATE kullanicilar SET password_hash = ? WHERE id = ?', [hash, req.user.id]);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: 'Sunucu hatası.' });
+    res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 

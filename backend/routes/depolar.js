@@ -127,6 +127,7 @@ router.put('/:id/restore', adminGuard, async (req, res) => {
 // ── Kullanıcı erişimli: GET /?isletme_id=X ──
 // Admin ise adminGuard'dan sonraki tam listeye next() ile geç
 router.get('/', async (req, res, next) => {
+  try {
   if (req.user.rol === 'admin') return next();
 
   const { isletme_id } = req.query;
@@ -146,6 +147,10 @@ router.get('/', async (req, res, next) => {
   );
 
   res.json({ data: data || [], toplam: data.length });
+  } catch (err) {
+    console.error('[depolar GET / user]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // ── Admin yetkisi gerektiren rotalar ──
@@ -153,6 +158,7 @@ router.use(adminGuard);
 
 // GET /api/depolar?isletme_id=X&isletme_ids=X,Y&q=arama&sayfa=1&limit=50
 router.get('/', async (req, res) => {
+  try {
   const { isletme_id, isletme_ids, aktif, q, sayfa, limit = 50 } = req.query;
 
   const where = [];
@@ -228,26 +234,35 @@ router.get('/', async (req, res) => {
   }));
 
   res.json({ data: enriched, toplam });
+  } catch (err) {
+    console.error('[depolar GET / admin]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // GET /api/depolar/:id
 router.get('/:id', async (req, res) => {
-  const [rows] = await pool.execute(
-    `SELECT d.*, i.ad AS isletme_ad, i.kod AS isletme_kod
-     FROM depolar d
-     LEFT JOIN isletmeler i ON i.id = d.isletme_id
-     WHERE d.id = ?`,
-    [req.params.id]
-  );
+  try {
+    const [rows] = await pool.execute(
+      `SELECT d.*, i.ad AS isletme_ad, i.kod AS isletme_kod
+       FROM depolar d
+       LEFT JOIN isletmeler i ON i.id = d.isletme_id
+       WHERE d.id = ?`,
+      [req.params.id]
+    );
 
-  if (!rows.length) return res.status(404).json({ hata: 'Depo bulunamadı.' });
+    if (!rows.length) return res.status(404).json({ hata: 'Depo bulunamadı.' });
 
-  const row = rows[0];
-  res.json({
-    ...row,
-    isletme_ad: undefined, isletme_kod: undefined,
-    isletmeler: { ad: row.isletme_ad, kod: row.isletme_kod },
-  });
+    const row = rows[0];
+    res.json({
+      ...row,
+      isletme_ad: undefined, isletme_kod: undefined,
+      isletmeler: { ad: row.isletme_ad, kod: row.isletme_kod },
+    });
+  } catch (err) {
+    console.error('[depolar GET /:id]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // POST /api/depolar

@@ -157,6 +157,12 @@ router.post('/', async (req, res) => {
   if (!ad_soyad || !email || !sifre) {
     return res.status(400).json({ hata: 'ad_soyad, email ve sifre zorunludur.' });
   }
+  if (sifre.length < 6) {
+    return res.status(400).json({ hata: 'Şifre en az 6 karakter olmalıdır.' });
+  }
+  if (rol && !['admin', 'kullanici'].includes(rol)) {
+    return res.status(400).json({ hata: 'Geçersiz rol. admin veya kullanici olmalı.' });
+  }
 
   try {
     const id = crypto.randomUUID();
@@ -395,7 +401,8 @@ router.put('/:id/restore', async (req, res) => {
     await pool.execute('UPDATE kullanicilar SET aktif = 1 WHERE id = ?', [req.params.id]);
     res.json({ mesaj: 'Kullanıcı geri alındı.' });
   } catch (err) {
-    return res.status(500).json({ hata: err.message });
+    console.error('[kullanicilar]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 

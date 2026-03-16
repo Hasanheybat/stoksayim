@@ -173,7 +173,8 @@ router.put('/:id/restore', async (req, res) => {
     await pool.execute('UPDATE isletmeler SET aktif = 1 WHERE id = ?', [req.params.id]);
     res.json({ mesaj: 'İşletme geri alındı.' });
   } catch (err) {
-    return res.status(500).json({ hata: err.message });
+    console.error('[isletmeler]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
   }
 });
 

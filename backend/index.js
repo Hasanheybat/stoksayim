@@ -22,7 +22,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'", "'unsafe-inline'"],
+      scriptSrc:  ["'self'"],
       styleSrc:   ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc:    ["'self'", "https://fonts.gstatic.com"],
       imgSrc:     ["'self'", "data:", "blob:"],
@@ -69,6 +69,7 @@ const authLimiter = rateLimit({
 
 app.use('/api/', apiLimiter);
 app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/update-password', authLimiter);
 
 // Routes
 app.use('/api/auth',        require('./routes/auth'));

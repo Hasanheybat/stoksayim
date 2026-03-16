@@ -104,6 +104,54 @@
 - **Risk:** Eski Supabase degiskenleri kafa karistirabilir.
 - **Deploy'da duzeltilecek:** EVET — Dosya temizlenecek veya silinecek.
 
+#### O6 — Dead Code (Admin POST depolar)
+
+- **Dosya:** `routes/depolar.js:254-276`
+- **Risk:** Admin icin tanimlanan ikinci POST `/` handler'i asla calismiyor. Ilk handler her zaman eslesir.
+- **Deploy'da duzeltilecek:** EVET — Dead code temizlenecek.
+
+#### O7 — Dashboard Sessiz Hata Yutma
+
+- **Dosya:** `frontend/src/pages/admin/Dashboard.jsx:109`
+- **Risk:** `catch {}` — API hatalari sessizce yutuluyor. Kullanici bos dashboard gorur, hata mesaji yok.
+- **Deploy'da duzeltilecek:** EVET — Hata mesaji gosterilecek.
+
+#### O8 — Unhandled Promise Rejection (3 sayfa)
+
+- **Dosyalar:** `DepolarPage.jsx:576`, `SayimlarPage.jsx:370`, `UrunlerPage.jsx:327`
+- **Risk:** `.then()` sonrasi `.catch()` yok. API hatasi unhandled rejection olusturur.
+- **Deploy'da duzeltilecek:** EVET — `.catch()` eklenecek.
+
+#### O9 — Loading Flash (Depo bulunamadi)
+
+- **Dosya:** `frontend/src/pages/admin/DepolarPage.jsx:556`
+- **Risk:** `loading` state baslangicta `false`. Veri yuklenmeden "Depo bulunamadi" gosteriliyor.
+- **Deploy'da duzeltilecek:** EVET — `useState(true)` yapilacak.
+
+#### O10 — Tum Kayitlari Tek Seferde Cekme (limit=9999)
+
+- **Dosya:** `frontend/src/pages/admin/RaporlarPage.jsx:97`
+- **Risk:** `api.get('/sayimlar?limit=9999')` — buyuk veride yavaslama ve bellek sorunu.
+- **Deploy'da duzeltilecek:** EVET — Sayfalama veya lazy load eklenecek.
+
+#### O11 — Genel Exception Hata Kaybi (Flutter)
+
+- **Dosya:** `lib/services/api_service.dart`
+- **Risk:** API hatalari genel `Exception` firlatiliyor, hata detayi (status code, mesaj) kayboluyor.
+- **Deploy'da duzeltilecek:** EVET — Ozel exception sinifi olusturulacak.
+
+#### O12 — Offline Handling Yok (Flutter)
+
+- **Dosyalar:** Tum screen'ler
+- **Risk:** Internet baglantisi yoksa kullaniciya bilgi verilmiyor.
+- **Deploy'da duzeltilecek:** EVET — Connectivity check + kullanici bildirimi eklenecek.
+
+#### O13 — TextEditingController Dispose Edilmiyor (Flutter)
+
+- **Dosya:** `lib/screens/sayim_detay_screen.dart`
+- **Risk:** Controller dispose edilmediginde memory leak olusur.
+- **Deploy'da duzeltilecek:** EVET — dispose() eklenmeli.
+
 ---
 
 ### DUSUK
@@ -118,6 +166,23 @@
 - **Dosya:** `frontend/src/store/authStoreAdm.js` satir 25-31
 - **Risk:** Network hatasi durumunda eski oturum kalabilir.
 - **Deploy'da duzeltilecek:** HAYIR — Edge case, dusuk oncelik.
+
+#### D3 — PageHeader 5x Duplicate Kod
+
+- **Dosyalar:** IsletmelerPage, DepolarPage, UrunlerPage, SayimlarPage, ToplanmisSayimlarPage
+- **Risk:** Ayni bilesen 5 kez tekrar tanimlanmis. Bakim zorlugu.
+- **Deploy'da duzeltilecek:** HAYIR — Kod kalitesi, risk yok.
+
+#### D4 — IsletmeFiltre + Export Fonksiyonlari 3x Duplicate
+
+- **Dosyalar:** DepolarPage, SayimlarPage, ToplanmisSayimlarPage
+- **Risk:** Ayni fonksiyonlar 3 kez tekrar tanimlanmis.
+- **Deploy'da duzeltilecek:** HAYIR — Kod kalitesi, risk yok.
+
+#### D5 — Kullanilmayan Import (Bell)
+
+- **Dosya:** `AdminLayout.jsx:3`
+- **Deploy'da duzeltilecek:** HAYIR — Zarar vermiyor.
 
 ---
 

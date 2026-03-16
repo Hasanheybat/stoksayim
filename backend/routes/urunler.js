@@ -64,10 +64,14 @@ async function checkUrunYetki(req, res, islem) {
 }
 
 // Aynı işletmede başka bir üründe bu barkod var mı kontrol et
-async function barkodBenzersizKontrol(isletmeId, barkodlar, haricUrunId = null) {
+// conn parametresi verilirse transaction içinde çalışır (race condition koruması)
+async function barkodBenzersizKontrol(isletmeId, barkodlar, haricUrunId = null, conn = null) {
   if (!barkodlar || !barkodlar.length) return null;
-  const [rows] = await pool.execute(
-    'SELECT id, urun_adi, barkodlar FROM isletme_urunler WHERE isletme_id = ? AND aktif = 1',
+  const db = conn || pool;
+  // FOR UPDATE ile satırları kilitle (transaction içindeyse race condition önlenir)
+  const lockSuffix = conn ? ' FOR UPDATE' : '';
+  const [rows] = await db.execute(
+    `SELECT id, urun_adi, barkodlar FROM isletme_urunler WHERE isletme_id = ? AND aktif = 1${lockSuffix}`,
     [isletmeId]
   );
   for (const row of rows) {
@@ -100,15 +104,21 @@ router.put('/:id', async (req, res) => {
     : (typeof barkodlar === 'string' ? barkodlar.split(',').map(b => b.trim()).filter(Boolean) : []);
   const barkodStr = barkodArr.join(',');
 
+  const conn = await pool.getConnection();
   try {
-    // Aynı işletmede başka üründe bu barkod var mı?
-    const [urunRow] = await pool.execute('SELECT isletme_id FROM isletme_urunler WHERE id = ?', [req.params.id]);
+    await conn.beginTransaction();
+
+    // Aynı işletmede başka üründe bu barkod var mı? (transaction ile kilitli)
+    const [urunRow] = await conn.execute('SELECT isletme_id FROM isletme_urunler WHERE id = ? FOR UPDATE', [req.params.id]);
     if (urunRow.length && barkodArr.length) {
-      const cakisan = await barkodBenzersizKontrol(urunRow[0].isletme_id, barkodArr, req.params.id);
-      if (cakisan) return res.status(409).json({ hata: `"${cakisan.barkod}" barkodu "${cakisan.urunAdi}" ürününe zaten tanımlı.` });
+      const cakisan = await barkodBenzersizKontrol(urunRow[0].isletme_id, barkodArr, req.params.id, conn);
+      if (cakisan) {
+        await conn.rollback();
+        return res.status(409).json({ hata: `"${cakisan.barkod}" barkodu "${cakisan.urunAdi}" ürününe zaten tanımlı.` });
+      }
     }
 
-    await pool.execute(
+    await conn.execute(
       `UPDATE isletme_urunler SET
         urun_adi = ?, urun_kodu = ?, isim_2 = ?, barkodlar = ?, birim = ?,
         son_guncelleme = NOW(), guncelleme_kaynagi = 'kullanici',
@@ -116,13 +126,19 @@ router.put('/:id', async (req, res) => {
       WHERE id = ?`,
       [urun_adi.trim(), urun_kodu.trim(), (isim_2 || '').trim(), barkodStr, birim || null, req.user.id, req.params.id]
     );
+
+    await conn.commit();
+
     const [rows] = await pool.execute('SELECT * FROM isletme_urunler WHERE id = ?', [req.params.id]);
     if (!rows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
     res.json(rows[0]);
   } catch (err) {
+    await conn.rollback();
     console.error('[PUT /urunler/:id]', err.message);
     console.error('[urunler]', err.message);
     return res.status(500).json({ hata: 'Sunucu hatası.' });
+  } finally {
+    conn.release();
   }
 });
 
@@ -139,27 +155,39 @@ router.post('/', yetkiGuard('urun', 'ekle', 'body'), async (req, res) => {
     : (typeof barkodlar === 'string' ? barkodlar.split(',').map(b => b.trim()).filter(Boolean) : []);
   const barkodStr = barkodArr.join(',');
 
-  // Aynı işletmede başka üründe bu barkod var mı?
-  if (barkodArr.length) {
-    const cakisan = await barkodBenzersizKontrol(isletme_id, barkodArr);
-    if (cakisan) return res.status(409).json({ hata: `"${cakisan.barkod}" barkodu "${cakisan.urunAdi}" ürününe zaten tanımlı.` });
-  }
-
   const id = crypto.randomUUID();
   const kod = urun_kodu?.trim() || `STK-${id.slice(0, 8)}`;
+  const conn = await pool.getConnection();
   try {
-    await pool.execute(
+    await conn.beginTransaction();
+
+    // Aynı işletmede başka üründe bu barkod var mı? (transaction ile kilitli)
+    if (barkodArr.length) {
+      const cakisan = await barkodBenzersizKontrol(isletme_id, barkodArr, null, conn);
+      if (cakisan) {
+        await conn.rollback();
+        return res.status(409).json({ hata: `"${cakisan.barkod}" barkodu "${cakisan.urunAdi}" ürününe zaten tanımlı.` });
+      }
+    }
+
+    await conn.execute(
       `INSERT INTO isletme_urunler
         (id, isletme_id, urun_kodu, urun_adi, isim_2, birim, barkodlar, kategori, guncelleme_kaynagi, guncelleyen_kullanici_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'kullanici', ?)`,
       [id, isletme_id, kod, urun_adi.trim(), (isim_2 || '').trim(), birim || 'ADET', barkodStr, kategori || null, req.user.id]
     );
+
+    await conn.commit();
+
     const [rows] = await pool.execute('SELECT * FROM isletme_urunler WHERE id = ?', [id]);
     res.status(201).json(rows[0]);
   } catch (err) {
+    await conn.rollback();
     if (err.errno === 1062) return res.status(409).json({ hata: 'Bu ürün kodu bu işletmede zaten var.' });
     console.error('[urunler]', err.message);
     return res.status(500).json({ hata: 'Sunucu hatası.' });
+  } finally {
+    conn.release();
   }
 });
 
@@ -192,6 +220,7 @@ router.put('/:id/restore', adminGuard, async (req, res) => {
 
 // ── Kullanıcı erişimli: GET /barkod/:barkod?isletme_id=X ──
 router.get('/barkod/:barkod', async (req, res, next) => {
+  try {
   if (req.user.rol === 'admin') return next();
 
   const { isletme_id } = req.query;
@@ -217,11 +246,16 @@ router.get('/barkod/:barkod', async (req, res, next) => {
 
   if (!urun) return res.status(404).json({ hata: 'Barkod sistemde bulunamadı.' });
   res.json(urun);
+  } catch (err) {
+    console.error('[urunler GET /barkod user]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // ── Kullanıcı erişimli: GET /?isletme_id=X&q=arama ──
 // Admin ise adminGuard'dan sonraki tam listeye next() ile geç
 router.get('/', async (req, res, next) => {
+  try {
   if (req.user.rol === 'admin') return next();
 
   const { isletme_id, q } = req.query;
@@ -252,6 +286,10 @@ router.get('/', async (req, res, next) => {
   );
 
   res.json(data || []);
+  } catch (err) {
+    console.error('[urunler GET / user]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // ── Admin yetkisi gerektiren rotalar ──
@@ -288,6 +326,7 @@ router.get('/sablon', (req, res) => {
 
 // GET /api/urunler?isletme_id=X&q=arama&sayfa=1  (isletme_id opsiyonel)
 router.get('/', async (req, res) => {
+  try {
   const { isletme_id, q, alan, aktif, sayfa = 1, limit = 20 } = req.query;
 
   const sp = Math.max(1, (v => Number.isNaN(v) ? 1 : v)(parseInt(sayfa)));
@@ -346,10 +385,15 @@ router.get('/', async (req, res) => {
   });
 
   res.json({ data: enriched, toplam, sayfa: parseInt(sayfa), limit: parseInt(limit) });
+  } catch (err) {
+    console.error('[urunler GET / admin]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // GET /api/urunler/barkod/:barkod?isletme_id=X
 router.get('/barkod/:barkod', async (req, res) => {
+  try {
   const { isletme_id } = req.query;
 
   if (!isletme_id) {
@@ -368,22 +412,32 @@ router.get('/barkod/:barkod', async (req, res) => {
 
   if (!urun) return res.status(404).json({ hata: 'Barkod sistemde bulunamadı.' });
   res.json(urun);
+  } catch (err) {
+    console.error('[urunler GET /barkod admin]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // GET /api/urunler/:id
 router.get('/:id', async (req, res) => {
-  const [rows] = await pool.execute(
-    'SELECT * FROM isletme_urunler WHERE id = ?',
-    [req.params.id]
-  );
+  try {
+    const [rows] = await pool.execute(
+      'SELECT * FROM isletme_urunler WHERE id = ?',
+      [req.params.id]
+    );
 
-  if (!rows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
-  res.json(rows[0]);
+    if (!rows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[urunler GET /:id]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 
 // POST /api/urunler/:id/barkod — Barkod ekle
 router.post('/:id/barkod', async (req, res) => {
+  try {
   const { barkod } = req.body;
 
   if (!barkod) return res.status(400).json({ hata: 'barkod zorunludur.' });
@@ -420,10 +474,15 @@ router.post('/:id/barkod', async (req, res) => {
 
   const [rows] = await pool.execute('SELECT * FROM isletme_urunler WHERE id = ?', [req.params.id]);
   res.json(rows[0]);
+  } catch (err) {
+    console.error('[urunler POST /:id/barkod]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // DELETE /api/urunler/:id/barkod/:barkod — Barkod sil
 router.delete('/:id/barkod/:barkod', async (req, res) => {
+  try {
   const [mevcutRows] = await pool.execute(
     'SELECT barkodlar FROM isletme_urunler WHERE id = ?',
     [req.params.id]
@@ -443,6 +502,10 @@ router.delete('/:id/barkod/:barkod', async (req, res) => {
 
   const [rows] = await pool.execute('SELECT * FROM isletme_urunler WHERE id = ?', [req.params.id]);
   res.json(rows[0]);
+  } catch (err) {
+    console.error('[urunler DELETE /:id/barkod]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // POST /api/urunler/yukle?isletme_id=X&preview=true/false

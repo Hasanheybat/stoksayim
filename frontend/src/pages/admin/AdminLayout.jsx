@@ -44,8 +44,8 @@ export default function AdminLayout() {
 
   const handleCikis = async () => { await cikisYap(); navigate('/login'); };
 
-  const initials = kullanici?.ad_soyad
-    ? kullanici.ad_soyad.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+  const initials = kullanici?.ad_soyad?.trim()
+    ? kullanici.ad_soyad.trim().split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2)
     : 'AD';
 
   return (

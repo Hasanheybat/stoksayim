@@ -169,31 +169,40 @@ router.delete('/:id', async (req, res) => {
       toplam_sayim: { goruntule: false, ekle: false, duzenle: false, sil: false },
     });
 
-    // Yeniden atama yapılanları işle
-    const atamaKiIds = [];
-    for (const atama of atamalar) {
-      if (!atama.ki_id || !atama.yeni_rol_id) continue;
-      atamaKiIds.push(atama.ki_id);
-      // Yeni rolün yetkilerini al
-      const [yeniRolRows] = await pool.execute('SELECT yetkiler FROM roller WHERE id = ?', [atama.yeni_rol_id]);
-      if (yeniRolRows.length) {
-        await pool.execute(
-          'UPDATE kullanici_isletme SET rol_id = ?, yetkiler = ? WHERE id = ?',
-          [atama.yeni_rol_id, yeniRolRows[0].yetkiler, atama.ki_id]
-        );
+    // Transaction ile atomik işlem
+    const conn = await pool.getConnection();
+    await conn.beginTransaction();
+    try {
+      // Yeniden atama yapılanları işle
+      for (const atama of atamalar) {
+        if (!atama.ki_id || !atama.yeni_rol_id) continue;
+        const [yeniRolRows] = await conn.execute('SELECT yetkiler FROM roller WHERE id = ?', [atama.yeni_rol_id]);
+        if (yeniRolRows.length) {
+          await conn.execute(
+            'UPDATE kullanici_isletme SET rol_id = ?, yetkiler = ? WHERE id = ?',
+            [atama.yeni_rol_id, yeniRolRows[0].yetkiler, atama.ki_id]
+          );
+        }
       }
+
+      // Yeniden atama yapılmayan kullanıcıların yetkilerini sıfırla
+      await conn.execute(
+        'UPDATE kullanici_isletme SET rol_id = NULL, yetkiler = ? WHERE rol_id = ?',
+        [bosYetkiler, req.params.id]
+      );
+
+      await conn.execute(
+        'DELETE FROM roller WHERE id = ?',
+        [req.params.id]
+      );
+
+      await conn.commit();
+    } catch (txErr) {
+      await conn.rollback();
+      throw txErr;
+    } finally {
+      conn.release();
     }
-
-    // Yeniden atama yapılmayan kullanıcıların yetkilerini sıfırla
-    await pool.execute(
-      'UPDATE kullanici_isletme SET rol_id = NULL, yetkiler = ? WHERE rol_id = ?',
-      [bosYetkiler, req.params.id]
-    );
-
-    await pool.execute(
-      'DELETE FROM roller WHERE id = ?',
-      [req.params.id]
-    );
 
     res.json({ mesaj: 'Rol silindi.' });
   } catch (err) {

@@ -40,13 +40,17 @@ router.use(authGuard);
 
 // GET /api/sayimlar?isletme_id=X&isletme_ids=X,Y&depo_id=Y&durum=Z&q=arama&sayfa=1&limit=50
 router.get('/', async (req, res) => {
+  try {
   const { isletme_id, isletme_ids, depo_id, durum, q, toplama, sayfa = 1, limit = 50 } = req.query;
 
   // Yetki kontrolü: toplama=1 ise toplam_sayim.goruntule, değilse sayim.goruntule
   const yetkiKat = toplama === '1' ? 'toplam_sayim' : 'sayim';
   if (req.user.rol !== 'admin') {
-    const isId = isletme_id || (isletme_ids ? isletme_ids.split(',')[0] : null);
-    if (isId) {
+    // Tüm isletme_ids için yetki kontrolü yap (sadece ilk değil, hepsi)
+    const allIds = [];
+    if (isletme_id) allIds.push(isletme_id);
+    if (isletme_ids) allIds.push(...isletme_ids.split(',').filter(Boolean));
+    for (const isId of allIds) {
       const [kiRows] = await pool.execute(
         'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
         [req.user.id, isId]
@@ -117,10 +121,15 @@ router.get('/', async (req, res) => {
   }));
 
   res.json({ data: enriched, toplam: toplam || 0 });
+  } catch (err) {
+    console.error('[sayimlar GET /]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // GET /api/sayimlar/:id
 router.get('/:id', async (req, res) => {
+  try {
   // 1. Sayım bilgisi + JOINler
   const [sayimRows] = await pool.execute(
     `SELECT s.*,
@@ -173,10 +182,15 @@ router.get('/:id', async (req, res) => {
   };
 
   res.json(result);
+  } catch (err) {
+    console.error('[sayimlar GET /:id]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // DELETE /api/sayimlar/:id (durum = 'silindi')
 router.delete('/:id', async (req, res) => {
+  try {
   const [sayimRows] = await pool.execute(
     'SELECT kullanici_id, durum, isletme_id FROM sayimlar WHERE id = ?',
     [req.params.id]
@@ -218,6 +232,10 @@ router.delete('/:id', async (req, res) => {
 
   await pool.execute("UPDATE sayimlar SET durum = 'silindi' WHERE id = ?", [req.params.id]);
   res.json({ mesaj: 'Sayım silindi.' });
+  } catch (err) {
+    console.error('[sayimlar DELETE /:id]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // PUT /api/sayimlar/:id/restore — Silinen sayımı geri al (admin only)
@@ -320,6 +338,7 @@ router.put('/:id', async (req, res) => {
 
 // PUT /api/sayimlar/:id/tamamla
 router.put('/:id/tamamla', async (req, res) => {
+  try {
   const [sayimRows] = await pool.execute(
     'SELECT kullanici_id, durum, isletme_id, notlar FROM sayimlar WHERE id = ?',
     [req.params.id]
@@ -337,10 +356,15 @@ router.put('/:id/tamamla', async (req, res) => {
   await pool.execute("UPDATE sayimlar SET durum = 'tamamlandi' WHERE id = ?", [req.params.id]);
   const [rows] = await pool.execute('SELECT * FROM sayimlar WHERE id = ?', [req.params.id]);
   res.json(rows[0]);
+  } catch (err) {
+    console.error('[sayimlar PUT /:id/tamamla]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // PUT /api/sayimlar/:id/yeniden-ac  (sadece admin)
 router.put('/:id/yeniden-ac', async (req, res) => {
+  try {
   if (req.user.rol !== 'admin') {
     return res.status(403).json({ hata: 'Sayımı yeniden açma yetkisi yalnızca adminlere aittir.' });
   }
@@ -356,10 +380,15 @@ router.put('/:id/yeniden-ac', async (req, res) => {
   await pool.execute("UPDATE sayimlar SET durum = 'devam' WHERE id = ?", [req.params.id]);
   const [rows] = await pool.execute('SELECT * FROM sayimlar WHERE id = ?', [req.params.id]);
   res.json(rows[0]);
+  } catch (err) {
+    console.error('[sayimlar PUT /:id/yeniden-ac]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // GET /api/sayimlar/:id/kalemler
 router.get('/:id/kalemler', async (req, res) => {
+  try {
   // Sayımın var olduğunu doğrula
   const [sayimRows] = await pool.execute(
     'SELECT kullanici_id, isletme_id, notlar FROM sayimlar WHERE id = ?',
@@ -392,6 +421,10 @@ router.get('/:id/kalemler', async (req, res) => {
   }));
 
   res.json(enriched);
+  } catch (err) {
+    console.error('[sayimlar GET /:id/kalemler]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // POST /api/sayimlar/:id/kalem
@@ -400,6 +433,9 @@ router.post('/:id/kalem', async (req, res) => {
 
   if (!urun_id || miktar === undefined) {
     return res.status(400).json({ hata: 'urun_id ve miktar zorunludur.' });
+  }
+  if (isNaN(Number(miktar))) {
+    return res.status(400).json({ hata: 'miktar sayısal bir değer olmalıdır.' });
   }
 
   // Sayımın var olduğunu ve kullanıcının sahibi olduğunu doğrula
@@ -449,6 +485,7 @@ router.post('/:id/kalem', async (req, res) => {
 
 // PUT /api/sayimlar/:id/kalem/:kalem_id  — sayim/toplam_sayim.duzenle yetkisi gerekli
 router.put('/:id/kalem/:kalem_id', async (req, res) => {
+  try {
   const { miktar, birim, notlar } = req.body;
 
   const [sayimRows] = await pool.execute(
@@ -478,10 +515,15 @@ router.put('/:id/kalem/:kalem_id', async (req, res) => {
   const [rows] = await pool.execute('SELECT * FROM sayim_kalemleri WHERE id = ? AND sayim_id = ?', [req.params.kalem_id, req.params.id]);
   if (!rows.length) return res.status(404).json({ hata: 'Kalem bulunamadı.' });
   res.json(rows[0]);
+  } catch (err) {
+    console.error('[sayimlar PUT /:id/kalem/:kalem_id]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // DELETE /api/sayimlar/:id/kalem/:kalem_id  — sayim/toplam_sayim.duzenle yetkisi gerekli
 router.delete('/:id/kalem/:kalem_id', async (req, res) => {
+  try {
   const [sayimRows] = await pool.execute(
     'SELECT kullanici_id, isletme_id, durum, notlar FROM sayimlar WHERE id = ?',
     [req.params.id]
@@ -499,6 +541,10 @@ router.delete('/:id/kalem/:kalem_id', async (req, res) => {
   );
 
   res.json({ mesaj: 'Kalem silindi.' });
+  } catch (err) {
+    console.error('[sayimlar DELETE /:id/kalem/:kalem_id]', err.message);
+    return res.status(500).json({ hata: 'Sunucu hatası.' });
+  }
 });
 
 // POST /api/sayimlar/topla — Seçilen sayımların kalemlerini toplayarak yeni sayım oluştur
@@ -515,15 +561,19 @@ router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, re
     return res.status(400).json({ hata: 'isletme_id zorunludur.' });
   }
 
+  const conn = await pool.getConnection();
   try {
-    // 1. Seçilen sayımları doğrula
+    await conn.beginTransaction();
+
+    // 1. Seçilen sayımları doğrula (FOR UPDATE ile kilitle)
     const placeholders = sayim_ids.map(() => '?').join(',');
-    const [sayimlar] = await pool.execute(
-      `SELECT s.id, s.isletme_id, s.depo_id, s.kullanici_id, s.ad, s.tarih, d.ad AS depo_ad FROM sayimlar s LEFT JOIN depolar d ON s.depo_id = d.id WHERE s.id IN (${placeholders}) AND s.durum != 'silindi'`,
+    const [sayimlar] = await conn.execute(
+      `SELECT s.id, s.isletme_id, s.depo_id, s.kullanici_id, s.ad, s.tarih, d.ad AS depo_ad FROM sayimlar s LEFT JOIN depolar d ON s.depo_id = d.id WHERE s.id IN (${placeholders}) AND s.durum != 'silindi' FOR UPDATE`,
       sayim_ids
     );
 
     if (sayimlar.length !== sayim_ids.length) {
+      await conn.rollback();
       return res.status(400).json({ hata: 'Bazı sayımlar bulunamadı.' });
     }
 
@@ -531,12 +581,13 @@ router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, re
     if (req.user.rol !== 'admin') {
       const yetkisiz = sayimlar.find(s => s.kullanici_id !== req.user.id);
       if (yetkisiz) {
+        await conn.rollback();
         return res.status(403).json({ hata: 'Sadece kendi sayımlarınızı toplayabilirsiniz.' });
       }
     }
 
     // 2. Seçilen sayımların kalemlerini çek
-    const [kalemler] = await pool.execute(
+    const [kalemler] = await conn.execute(
       `SELECT sk.sayim_id, sk.urun_id, sk.miktar, sk.birim
        FROM sayim_kalemleri sk
        WHERE sk.sayim_id IN (${placeholders})`,
@@ -549,7 +600,7 @@ router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, re
       if (!toplamMap[k.urun_id]) {
         toplamMap[k.urun_id] = { miktar: 0, birim: k.birim };
       }
-      toplamMap[k.urun_id].miktar += parseFloat(k.miktar);
+      toplamMap[k.urun_id].miktar += parseFloat(k.miktar) || 0;
     }
 
     // 4. İlk sayımın depo_id'sini kullan
@@ -562,7 +613,7 @@ router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, re
 
     // 6. Yeni sayım oluştur
     const yeniId = crypto.randomUUID();
-    await pool.execute(
+    await conn.execute(
       `INSERT INTO sayimlar (id, isletme_id, depo_id, kullanici_id, ad, tarih, durum, notlar)
        VALUES (?, ?, ?, ?, ?, ?, 'tamamlandi', ?)`,
       [yeniId, isletme_id, depo_id, req.user.id, ad.trim(), new Date().toISOString().split('T')[0], notlar]
@@ -571,20 +622,25 @@ router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, re
     // 7. Toplanmış kalemleri ekle
     for (const [urun_id, data] of Object.entries(toplamMap)) {
       const kalemId = crypto.randomUUID();
-      await pool.execute(
+      await conn.execute(
         `INSERT INTO sayim_kalemleri (id, sayim_id, urun_id, miktar, birim)
          VALUES (?, ?, ?, ?, ?)`,
         [kalemId, yeniId, urun_id, data.miktar, data.birim]
       );
     }
 
+    await conn.commit();
+
     // 8. Oluşturulan sayımı döndür
     const [rows] = await pool.execute('SELECT * FROM sayimlar WHERE id = ?', [yeniId]);
     res.status(201).json(rows[0]);
   } catch (err) {
+    await conn.rollback();
     console.error('Sayım toplama hatası:', err);
     console.error('[sayimlar]', err.message);
     return res.status(500).json({ hata: 'Sunucu hatası.' });
+  } finally {
+    conn.release();
   }
 });
 
