@@ -200,26 +200,34 @@ router.post('/', yetkiGuard('urun', 'ekle', 'body'), async (req, res) => {
 router.delete('/:id', async (req, res) => {
   if (!await checkUrunYetki(req, res, 'sil')) return;
 
+  const conn = await pool.getConnection();
   try {
-    // Aktif sayımda kullanılıyor mu kontrol et
-    const [aktifSayimlar] = await pool.execute(
+    await conn.beginTransaction();
+
+    // Aktif sayımda kullanılıyor mu kontrol et (FOR UPDATE ile kilitle)
+    const [aktifSayimlar] = await conn.execute(
       `SELECT DISTINCT s.ad FROM sayim_kalemleri sk
        JOIN sayimlar s ON s.id = sk.sayim_id
-       WHERE sk.urun_id = ? AND s.durum = 'devam'`,
+       WHERE sk.urun_id = ? AND s.durum = 'devam' FOR UPDATE`,
       [req.params.id]
     );
     if (aktifSayimlar.length > 0) {
+      await conn.rollback();
       return res.status(409).json({
         hata: 'Bu ürün aktif sayımlarda kullanılıyor.',
         sayimlar: aktifSayimlar.map(s => s.ad),
       });
     }
 
-    await pool.execute('UPDATE isletme_urunler SET aktif = 0 WHERE id = ?', [req.params.id]);
+    await conn.execute('UPDATE isletme_urunler SET aktif = 0 WHERE id = ?', [req.params.id]);
+    await conn.commit();
     res.json({ mesaj: 'Ürün silindi.' });
   } catch (err) {
+    await conn.rollback();
     console.error('[urunler]', err.message);
     return res.status(500).json({ hata: 'Sunucu hatası.' });
+  } finally {
+    conn.release();
   }
 });
 
@@ -460,6 +468,9 @@ router.post('/:id/barkod', async (req, res) => {
   const { barkod } = req.body;
 
   if (!barkod) return res.status(400).json({ hata: 'barkod zorunludur.' });
+  if (!/^[a-zA-Z0-9\-]{1,50}$/.test(barkod)) {
+    return res.status(400).json({ hata: 'Geçerli bir barkod giriniz.' });
+  }
 
   const [mevcutRows] = await pool.execute(
     'SELECT barkodlar FROM isletme_urunler WHERE id = ?',
@@ -533,7 +544,7 @@ router.post('/yukle', (req, res, next) => {
     if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ hata: 'Dosya 10 MB sınırını aşıyor.' });
     }
-    if (err) return res.status(400).json({ hata: err.message });
+    if (err) return res.status(400).json({ hata: 'Dosya yüklenemedi.' });
     next();
   });
 }, async (req, res) => {

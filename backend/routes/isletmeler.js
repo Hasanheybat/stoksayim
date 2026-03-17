@@ -84,6 +84,9 @@ router.post('/', async (req, res) => {
   if (!ad || !kod) {
     return res.status(400).json({ hata: 'Ad ve kod zorunludur.' });
   }
+  if (telefon && !/^[0-9+\-\s()]{7,20}$/.test(telefon)) {
+    return res.status(400).json({ hata: 'Geçerli bir telefon numarası giriniz.' });
+  }
 
   try {
     const id = crypto.randomUUID();
@@ -111,6 +114,10 @@ router.post('/', async (req, res) => {
 // PUT /api/isletmeler/:id
 router.put('/:id', async (req, res) => {
   const { ad, kod, adres, telefon, aktif } = req.body;
+
+  if (telefon && !/^[0-9+\-\s()]{7,20}$/.test(telefon)) {
+    return res.status(400).json({ hata: 'Geçerli bir telefon numarası giriniz.' });
+  }
 
   try {
     const fields = [];

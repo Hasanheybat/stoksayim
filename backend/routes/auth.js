@@ -12,6 +12,9 @@ router.post('/login', async (req, res) => {
   if (!email || !pass) {
     return res.status(400).json({ hata: 'Email ve şifre zorunludur.' });
   }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ hata: 'Geçerli bir email adresi giriniz.' });
+  }
 
   try {
     const [rows] = await pool.execute(
@@ -76,6 +79,9 @@ router.get('/me', authGuard, async (req, res) => {
 router.put('/update-email', authGuard, async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ hata: 'Email zorunludur.' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ hata: 'Geçerli bir email adresi giriniz.' });
+  }
 
   try {
     await pool.execute('UPDATE kullanicilar SET email = ? WHERE id = ?', [email.trim(), req.user.id]);
@@ -90,7 +96,7 @@ router.put('/update-email', authGuard, async (req, res) => {
 router.put('/update-password', authGuard, async (req, res) => {
   const { eskiSifre, yeniSifre } = req.body;
   if (!eskiSifre || !yeniSifre) return res.status(400).json({ hata: 'Eski ve yeni şifre zorunludur.' });
-  if (yeniSifre.length < 6) return res.status(400).json({ hata: 'Yeni şifre en az 6 karakter olmalıdır.' });
+  if (yeniSifre.length < 8) return res.status(400).json({ hata: 'Yeni şifre en az 8 karakter olmalıdır.' });
 
   try {
     const [rows] = await pool.execute('SELECT password_hash FROM kullanicilar WHERE id = ?', [req.user.id]);

@@ -281,7 +281,7 @@ router.put('/:id', async (req, res) => {
   const { depo_id, ad, kisiler } = req.body;
 
   const [sayimRows] = await pool.execute(
-    'SELECT kullanici_id, isletme_id, durum, notlar FROM sayimlar WHERE id = ?',
+    'SELECT kullanici_id, isletme_id, durum, notlar, updated_at FROM sayimlar WHERE id = ?',
     [req.params.id]
   );
 
@@ -325,9 +325,15 @@ router.put('/:id', async (req, res) => {
     return res.json(rows[0]);
   }
 
+  fields.push('updated_at = NOW()');
   params.push(req.params.id);
   try {
-    await pool.execute(`UPDATE sayimlar SET ${fields.join(', ')} WHERE id = ?`, params);
+    const updateParams = sayim.updated_at ? [...params, sayim.updated_at] : params;
+    const whereClause = sayim.updated_at ? 'WHERE id = ? AND updated_at = ?' : 'WHERE id = ?';
+    const [result] = await pool.execute(`UPDATE sayimlar SET ${fields.join(', ')} ${whereClause}`, updateParams);
+    if (result.affectedRows === 0) {
+      return res.status(409).json({ hata: 'Bu kayıt başka biri tarafından güncellendi. Lütfen sayfayı yenileyip tekrar deneyin.' });
+    }
     const [rows] = await pool.execute('SELECT * FROM sayimlar WHERE id = ?', [req.params.id]);
     res.json(rows[0]);
   } catch (err) {
@@ -453,6 +459,15 @@ router.post('/:id/kalem', async (req, res) => {
     return res.status(400).json({ hata: 'Tamamlanmış sayıma kalem eklenemez.' });
   }
 
+  // Ürünün aynı işletmeye ait olduğunu kontrol et
+  const [urunRows] = await pool.execute(
+    'SELECT isletme_id FROM isletme_urunler WHERE id = ?', [urun_id]
+  );
+  if (!urunRows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
+  if (urunRows[0].isletme_id !== sayim.isletme_id) {
+    return res.status(400).json({ hata: 'Bu ürün bu işletmeye ait değil.' });
+  }
+
   const id = crypto.randomUUID();
   try {
     await pool.execute(
@@ -568,13 +583,13 @@ router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, re
     // 1. Seçilen sayımları doğrula (FOR UPDATE ile kilitle)
     const placeholders = sayim_ids.map(() => '?').join(',');
     const [sayimlar] = await conn.execute(
-      `SELECT s.id, s.isletme_id, s.depo_id, s.kullanici_id, s.ad, s.tarih, d.ad AS depo_ad FROM sayimlar s LEFT JOIN depolar d ON s.depo_id = d.id WHERE s.id IN (${placeholders}) AND s.durum != 'silindi' FOR UPDATE`,
+      `SELECT s.id, s.isletme_id, s.depo_id, s.kullanici_id, s.ad, s.tarih, s.durum, d.ad AS depo_ad FROM sayimlar s LEFT JOIN depolar d ON s.depo_id = d.id WHERE s.id IN (${placeholders}) AND s.durum = 'tamamlandi' FOR UPDATE`,
       sayim_ids
     );
 
     if (sayimlar.length !== sayim_ids.length) {
       await conn.rollback();
-      return res.status(400).json({ hata: 'Bazı sayımlar bulunamadı.' });
+      return res.status(400).json({ hata: 'Sadece tamamlanmış sayımlar birleştirilebilir.' });
     }
 
     // Yetki kontrolü — kullanıcı sadece kendi sayımlarını toplayabilir (admin hariç)
@@ -590,7 +605,7 @@ router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, re
     const [kalemler] = await conn.execute(
       `SELECT sk.sayim_id, sk.urun_id, sk.miktar, sk.birim
        FROM sayim_kalemleri sk
-       WHERE sk.sayim_id IN (${placeholders})`,
+       WHERE sk.sayim_id IN (${placeholders}) FOR UPDATE`,
       sayim_ids
     );
 

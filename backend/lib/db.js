@@ -1,6 +1,6 @@
 const mysql = require('mysql2/promise');
 
-const pool = mysql.createPool({
+const poolConfig = {
   host:     process.env.DB_HOST || 'localhost',
   port:     parseInt(process.env.DB_PORT || '3306'),
   user:     process.env.DB_USER || 'stoksay',
@@ -10,6 +10,13 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+};
+if (process.env.DB_SSL === 'true') {
+  poolConfig.ssl = { rejectUnauthorized: false };
+}
+
+const pool = mysql.createPool({
+  ...poolConfig,
   typeCast: function (field, next) {
     // JSON kolonlarını otomatik parse et
     if (field.type === 'JSON') {

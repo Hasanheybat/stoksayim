@@ -101,24 +101,32 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   if (!await checkDepoYetki(req, res, 'sil')) return;
 
+  const conn = await pool.getConnection();
   try {
-    // Aktif sayımda kullanılıyor mu kontrol et
-    const [aktifSayimlar] = await pool.execute(
-      "SELECT ad FROM sayimlar WHERE depo_id = ? AND durum = 'devam'",
+    await conn.beginTransaction();
+
+    // Aktif sayımda kullanılıyor mu kontrol et (FOR UPDATE ile kilitle)
+    const [aktifSayimlar] = await conn.execute(
+      "SELECT ad FROM sayimlar WHERE depo_id = ? AND durum = 'devam' FOR UPDATE",
       [req.params.id]
     );
     if (aktifSayimlar.length > 0) {
+      await conn.rollback();
       return res.status(409).json({
         hata: 'Bu depo aktif sayımlarda kullanılıyor.',
         sayimlar: aktifSayimlar.map(s => s.ad),
       });
     }
 
-    await pool.execute('UPDATE depolar SET aktif = 0 WHERE id = ?', [req.params.id]);
+    await conn.execute('UPDATE depolar SET aktif = 0 WHERE id = ?', [req.params.id]);
+    await conn.commit();
     res.json({ mesaj: 'Depo silindi.' });
   } catch (err) {
+    await conn.rollback();
     console.error('[depolar]', err.message);
     return res.status(500).json({ hata: 'Sunucu hatası.' });
+  } finally {
+    conn.release();
   }
 });
 

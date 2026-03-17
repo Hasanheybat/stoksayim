@@ -1,6 +1,6 @@
 # StokSay Guvenlik Raporu
 
-**Son Tarama:** 2026-03-15
+**Son Tarama:** 2026-03-17
 **Kapsam:** Backend API + Admin Paneli (Web)
 
 ---
@@ -14,7 +14,7 @@
 | "none" algorithm saldirisi | OK | Reddediliyor |
 | IDOR korumasi | OK | Tum endpoint'lerde sahiplik + yetki kontrolu |
 | Hata mesaji sizintisi | OK | err.message kullaniciya gosterilmiyor, loglaniyor |
-| Rate limiting | OK | API: 1500 istek/15dk, Login: 20 deneme/15dk |
+| Rate limiting | OK | Auth: 15 istek/15dk, Genel API: 100 istek/dk |
 | CORS | OK | Whitelist tabanli, bilinmeyen origin reddediliyor |
 | Helmet.js | OK | X-Content-Type-Options, HSTS, X-Frame-Options, Referrer-Policy |
 | X-Powered-By | OK | Kaldirildi (Helmet) |
@@ -24,6 +24,15 @@
 | JWT startup kontrolu | OK | JWT_SECRET 32 karakterden kisaysa sunucu baslamiyor |
 | Soft delete | OK | Veriler gercekten silinmiyor, `aktif=0` yapiliyor |
 | bcrypt | OK | 10 round salt ile sifre hash'leme |
+| Race condition korumasi | OK | Depo/urun silme: Transaction + FOR UPDATE |
+| Cross-isletme korumasi | OK | Sayim kalemine farkli isletme urunu eklenemez |
+| Sayim topla guvenligi | OK | Sadece tamamlanmis sayimlar birlestirilir |
+| Optimistic locking | OK | Sayim update'de updated_at kontrolu (409) |
+| Email dogrulama | OK | Login, kayit, guncelleme'de regex kontrolu |
+| Telefon dogrulama | OK | 7-20 karakter format kontrolu |
+| Barkod dogrulama | OK | Alfanumerik + tire, 1-50 karakter |
+| Sifre politikasi | OK | Minimum 8 karakter |
+| DB SSL destegi | OK | DB_SSL=true ile etkinlesir |
 
 ---
 
