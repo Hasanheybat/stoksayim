@@ -97,7 +97,7 @@ router.get('/', async (req, res) => {
   );
 
   const [data] = await pool.execute(
-    `SELECT s.id, s.ad, s.tarih, s.durum, s.notlar, s.created_at, s.isletme_id, s.depo_id,
+    `SELECT s.id, s.ad, s.tarih, s.durum, s.notlar, s.created_at, s.updated_at, s.isletme_id, s.depo_id,
        d.id AS depo_id_j, d.ad AS depo_ad,
        i.id AS isletme_id_j, i.ad AS isletme_ad,
        k.id AS kullanici_id_j, k.ad_soyad AS kullanici_ad_soyad
@@ -113,7 +113,7 @@ router.get('/', async (req, res) => {
 
   const enriched = data.map(row => ({
     id: row.id, ad: row.ad, tarih: row.tarih, durum: row.durum,
-    notlar: row.notlar, created_at: row.created_at,
+    notlar: row.notlar, created_at: row.created_at, updated_at: row.updated_at,
     isletme_id: row.isletme_id, depo_id: row.depo_id,
     depolar: { id: row.depo_id_j, ad: row.depo_ad },
     isletmeler: { id: row.isletme_id_j, ad: row.isletme_ad },
@@ -278,7 +278,7 @@ router.post('/', yetkiGuard('sayim', 'ekle', 'body'), async (req, res) => {
 
 // PUT /api/sayimlar/:id  — sayim.duzenle / toplam_sayim.duzenle yetkisi gerekli
 router.put('/:id', async (req, res) => {
-  const { depo_id, ad, kisiler } = req.body;
+  const { depo_id, ad, kisiler, updated_at: clientUpdatedAt } = req.body;
 
   const [sayimRows] = await pool.execute(
     'SELECT kullanici_id, isletme_id, durum, notlar, updated_at FROM sayimlar WHERE id = ?',
@@ -328,8 +328,19 @@ router.put('/:id', async (req, res) => {
   fields.push('updated_at = NOW()');
   params.push(req.params.id);
   try {
-    const updateParams = sayim.updated_at ? [...params, sayim.updated_at] : params;
-    const whereClause = sayim.updated_at ? 'WHERE id = ? AND updated_at = ?' : 'WHERE id = ?';
+    // updated_at format normalize: JS ISO string → MySQL local datetime
+    // mysql2 driver tarihleri JS Date (UTC) olarak döner, JSON.stringify UTC'ye çevirir
+    // Ama MySQL'deki datetime local timezone'da saklanır → local time string'e çevirmek gerekir
+    let normalizedUpdatedAt = clientUpdatedAt;
+    if (clientUpdatedAt) {
+      const d = new Date(clientUpdatedAt);
+      if (!isNaN(d.getTime())) {
+        const pad = (n) => String(n).padStart(2, '0');
+        normalizedUpdatedAt = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      }
+    }
+    const updateParams = normalizedUpdatedAt ? [...params, normalizedUpdatedAt] : params;
+    const whereClause = normalizedUpdatedAt ? 'WHERE id = ? AND updated_at = ?' : 'WHERE id = ?';
     const [result] = await pool.execute(`UPDATE sayimlar SET ${fields.join(', ')} ${whereClause}`, updateParams);
     if (result.affectedRows === 0) {
       return res.status(409).json({ hata: 'Bu kayıt başka biri tarafından güncellendi. Lütfen sayfayı yenileyip tekrar deneyin.' });
@@ -444,36 +455,43 @@ router.post('/:id/kalem', async (req, res) => {
     return res.status(400).json({ hata: 'miktar sayısal bir değer olmalıdır.' });
   }
 
-  // Sayımın var olduğunu ve kullanıcının sahibi olduğunu doğrula
-  const [sayimRows] = await pool.execute(
-    'SELECT kullanici_id, isletme_id, durum, notlar FROM sayimlar WHERE id = ?',
-    [req.params.id]
-  );
-
-  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
-  const sayim = sayimRows[0];
-
-  if (!await checkSayimYetki(sayim, req, res, 'duzenle')) return;
-
-  if (sayim.durum !== 'devam') {
-    return res.status(400).json({ hata: 'Tamamlanmış sayıma kalem eklenemez.' });
-  }
-
-  // Ürünün aynı işletmeye ait olduğunu kontrol et
-  const [urunRows] = await pool.execute(
-    'SELECT isletme_id FROM isletme_urunler WHERE id = ?', [urun_id]
-  );
-  if (!urunRows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
-  if (urunRows[0].isletme_id !== sayim.isletme_id) {
-    return res.status(400).json({ hata: 'Bu ürün bu işletmeye ait değil.' });
-  }
-
-  const id = crypto.randomUUID();
+  const conn = await pool.getConnection();
   try {
-    await pool.execute(
+    await conn.beginTransaction();
+
+    // Sayımın var olduğunu ve kullanıcının sahibi olduğunu doğrula (FOR UPDATE ile kilitle)
+    const [sayimRows] = await conn.execute(
+      'SELECT kullanici_id, isletme_id, durum, notlar FROM sayimlar WHERE id = ? FOR UPDATE',
+      [req.params.id]
+    );
+
+    if (!sayimRows.length) { await conn.rollback(); return res.status(404).json({ hata: 'Sayım bulunamadı.' }); }
+    const sayim = sayimRows[0];
+
+    if (!await checkSayimYetki(sayim, req, res, 'duzenle')) { await conn.rollback(); return; }
+
+    if (sayim.durum !== 'devam') {
+      await conn.rollback();
+      return res.status(400).json({ hata: 'Tamamlanmış sayıma kalem eklenemez.' });
+    }
+
+    // Ürünün aynı işletmeye ait olduğunu kontrol et
+    const [urunRows] = await conn.execute(
+      'SELECT isletme_id FROM isletme_urunler WHERE id = ?', [urun_id]
+    );
+    if (!urunRows.length) { await conn.rollback(); return res.status(404).json({ hata: 'Ürün bulunamadı.' }); }
+    if (urunRows[0].isletme_id !== sayim.isletme_id) {
+      await conn.rollback();
+      return res.status(400).json({ hata: 'Bu ürün bu işletmeye ait değil.' });
+    }
+
+    const id = crypto.randomUUID();
+    await conn.execute(
       'INSERT INTO sayim_kalemleri (id, sayim_id, urun_id, miktar, birim, notlar) VALUES (?, ?, ?, ?, ?, ?)',
       [id, req.params.id, urun_id, miktar, birim || null, notlar || null]
     );
+
+    await conn.commit();
 
     // Kalem + ürün bilgisi ile dön
     const [rows] = await pool.execute(
@@ -493,8 +511,11 @@ router.post('/:id/kalem', async (req, res) => {
       } : null,
     });
   } catch (err) {
+    await conn.rollback();
     console.error('[sayimlar]', err.message);
     return res.status(500).json({ hata: 'Sunucu hatası.' });
+  } finally {
+    conn.release();
   }
 });
 
@@ -590,6 +611,13 @@ router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, re
     if (sayimlar.length !== sayim_ids.length) {
       await conn.rollback();
       return res.status(400).json({ hata: 'Sadece tamamlanmış sayımlar birleştirilebilir.' });
+    }
+
+    // Tüm sayımların aynı işletmeye ait olduğunu doğrula
+    const ilkIsletmeId = sayimlar[0].isletme_id;
+    if (!sayimlar.every(s => s.isletme_id === ilkIsletmeId)) {
+      await conn.rollback();
+      return res.status(400).json({ hata: 'Tüm sayımlar aynı işletmeye ait olmalıdır.' });
     }
 
     // Yetki kontrolü — kullanıcı sadece kendi sayımlarını toplayabilir (admin hariç)

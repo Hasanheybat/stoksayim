@@ -41,12 +41,22 @@ const izinliOriginler = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
 
 app.use(cors({
   origin: (origin, cb) => {
-    // Origin yoksa (Postman, server-to-server) veya izin listesindeyse geç
+    // Origin yoksa (mobil uygulama, Postman, server-to-server) veya izin listesindeyse geç
+    // Not: Mobil uygulamalar ve cURL origin header göndermez — bu isteklere izin verilmeli
     if (!origin || izinliOriginler.includes(origin)) return cb(null, true);
-    cb(new Error(`CORS: "${origin}" origin'ine izin verilmiyor.`));
+    console.warn(`CORS engellendi: "${origin}"`);
+    cb(new Error('CORS ihlali'));
   },
   credentials: true,
 }));
+
+// CORS hata handler — Error('CORS ihlali') yakalanır ve 403 döner
+app.use((err, req, res, next) => {
+  if (err.message === 'CORS ihlali') {
+    return res.status(403).json({ hata: 'Bu origin\'den erişime izin verilmiyor.' });
+  }
+  next(err);
+});
 
 app.use(express.json());
 
@@ -67,9 +77,20 @@ const authLimiter = rateLimit({
   message: { hata: 'Çok fazla giriş denemesi. Lütfen 15 dakika sonra tekrar deneyin.' },
 });
 
+// Hassas yazma işlemleri için ayrı limiter
+const writeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,                    // 15 dk'da max 60 yazma işlemi
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { hata: 'Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin.' },
+});
+
 app.use('/api/', apiLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/update-password', authLimiter);
+app.use('/api/auth/update-email', authLimiter);
+app.use('/api/kullanicilar', writeLimiter);
 
 // Routes
 app.use('/api/auth',        require('./routes/auth'));

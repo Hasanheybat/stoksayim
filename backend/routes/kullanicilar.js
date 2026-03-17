@@ -157,12 +157,15 @@ router.post('/', async (req, res) => {
   if (!ad_soyad || !email || !sifre) {
     return res.status(400).json({ hata: 'ad_soyad, email ve sifre zorunludur.' });
   }
+  if (ad_soyad.length > 100) return res.status(400).json({ hata: 'Ad soyad en fazla 100 karakter olabilir.' });
+  if (email.length > 255) return res.status(400).json({ hata: 'Email en fazla 255 karakter olabilir.' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ hata: 'Geçerli bir email adresi giriniz.' });
   }
   if (sifre.length < 8) {
     return res.status(400).json({ hata: 'Şifre en az 8 karakter olmalıdır.' });
   }
+  if (sifre.length > 128) return res.status(400).json({ hata: 'Şifre en fazla 128 karakter olabilir.' });
   if (rol && !['admin', 'kullanici'].includes(rol)) {
     return res.status(400).json({ hata: 'Geçersiz rol. admin veya kullanici olmalı.' });
   }

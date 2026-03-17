@@ -10,7 +10,7 @@ const yetkiGuard = require('../middleware/yetkiGuard');
 const IZINLI_MIME_TURLERI = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
   'application/vnd.ms-excel',                                           // .xls
-  'application/octet-stream',                                           // bazı tarayıcılar generic gönderir
+  'application/octet-stream',                                           // bazı tarayıcılar generic gönderir (uzantı kontrolü ile güvenli)
 ]);
 const IZINLI_UZANTILAR = /\.(xlsx|xls)$/i;
 
@@ -472,38 +472,51 @@ router.post('/:id/barkod', async (req, res) => {
     return res.status(400).json({ hata: 'Geçerli bir barkod giriniz.' });
   }
 
-  const [mevcutRows] = await pool.execute(
-    'SELECT barkodlar FROM isletme_urunler WHERE id = ?',
-    [req.params.id]
-  );
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
 
-  if (!mevcutRows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
+    const [mevcutRows] = await conn.execute(
+      'SELECT barkodlar, isletme_id FROM isletme_urunler WHERE id = ? FOR UPDATE',
+      [req.params.id]
+    );
 
-  const barkodlar = (mevcutRows[0].barkodlar || '')
-    .split(',')
-    .map(b => b.trim())
-    .filter(b => b.length > 0);
+    if (!mevcutRows.length) { await conn.rollback(); return res.status(404).json({ hata: 'Ürün bulunamadı.' }); }
 
-  if (barkodlar.includes(barkod)) {
-    return res.status(409).json({ hata: 'Bu barkod zaten bu ürüne tanımlı.' });
+    const barkodlar = (mevcutRows[0].barkodlar || '')
+      .split(',')
+      .map(b => b.trim())
+      .filter(b => b.length > 0);
+
+    if (barkodlar.includes(barkod)) {
+      await conn.rollback();
+      return res.status(409).json({ hata: 'Bu barkod zaten bu ürüne tanımlı.' });
+    }
+
+    // Aynı işletmede başka üründe bu barkod var mı?
+    const cakisan = await barkodBenzersizKontrol(mevcutRows[0].isletme_id, [barkod], req.params.id);
+    if (cakisan) {
+      await conn.rollback();
+      return res.status(409).json({ hata: `"${barkod}" barkodu "${cakisan.urunAdi}" ürününe zaten tanımlı.` });
+    }
+
+    barkodlar.push(barkod);
+
+    await conn.execute(
+      'UPDATE isletme_urunler SET barkodlar = ?, son_guncelleme = NOW() WHERE id = ?',
+      [barkodlar.join(','), req.params.id]
+    );
+
+    await conn.commit();
+
+    const [rows] = await pool.execute('SELECT * FROM isletme_urunler WHERE id = ?', [req.params.id]);
+    res.json(rows[0]);
+  } catch (innerErr) {
+    await conn.rollback();
+    throw innerErr;
+  } finally {
+    conn.release();
   }
-
-  // Aynı işletmede başka üründe bu barkod var mı?
-  const [isletmeRow] = await pool.execute('SELECT isletme_id FROM isletme_urunler WHERE id = ?', [req.params.id]);
-  if (isletmeRow.length) {
-    const cakisan = await barkodBenzersizKontrol(isletmeRow[0].isletme_id, [barkod], req.params.id);
-    if (cakisan) return res.status(409).json({ hata: `"${barkod}" barkodu "${cakisan.urunAdi}" ürününe zaten tanımlı.` });
-  }
-
-  barkodlar.push(barkod);
-
-  await pool.execute(
-    'UPDATE isletme_urunler SET barkodlar = ?, son_guncelleme = NOW() WHERE id = ?',
-    [barkodlar.join(','), req.params.id]
-  );
-
-  const [rows] = await pool.execute('SELECT * FROM isletme_urunler WHERE id = ?', [req.params.id]);
-  res.json(rows[0]);
   } catch (err) {
     console.error('[urunler POST /:id/barkod]', err.message);
     return res.status(500).json({ hata: 'Sunucu hatası.' });

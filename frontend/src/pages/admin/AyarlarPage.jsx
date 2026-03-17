@@ -37,8 +37,8 @@ export default function AdminAyarlarPage() {
       toast.error('Şifreler eşleşmiyor.');
       return;
     }
-    if (sifreGuncelle.yeni.length < 6) {
-      toast.error('En az 6 karakter olmalı.');
+    if (sifreGuncelle.yeni.length < 8) {
+      toast.error('Şifre en az 8 karakter olmalı.');
       return;
     }
     setSifreY(true);

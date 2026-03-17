@@ -84,6 +84,9 @@ router.post('/', async (req, res) => {
   if (!ad || !kod) {
     return res.status(400).json({ hata: 'Ad ve kod zorunludur.' });
   }
+  if (ad.length > 255) return res.status(400).json({ hata: 'Ad en fazla 255 karakter olabilir.' });
+  if (kod.length > 50) return res.status(400).json({ hata: 'Kod en fazla 50 karakter olabilir.' });
+  if (adres && adres.length > 500) return res.status(400).json({ hata: 'Adres en fazla 500 karakter olabilir.' });
   if (telefon && !/^[0-9+\-\s()]{7,20}$/.test(telefon)) {
     return res.status(400).json({ hata: 'Geçerli bir telefon numarası giriniz.' });
   }
