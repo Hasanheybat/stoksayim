@@ -102,6 +102,18 @@ router.delete('/:id', async (req, res) => {
   if (!await checkDepoYetki(req, res, 'sil')) return;
 
   try {
+    // Aktif sayımda kullanılıyor mu kontrol et
+    const [aktifSayimlar] = await pool.execute(
+      "SELECT ad FROM sayimlar WHERE depo_id = ? AND durum = 'devam'",
+      [req.params.id]
+    );
+    if (aktifSayimlar.length > 0) {
+      return res.status(409).json({
+        hata: 'Bu depo aktif sayımlarda kullanılıyor.',
+        sayimlar: aktifSayimlar.map(s => s.ad),
+      });
+    }
+
     await pool.execute('UPDATE depolar SET aktif = 0 WHERE id = ?', [req.params.id]);
     res.json({ mesaj: 'Depo silindi.' });
   } catch (err) {

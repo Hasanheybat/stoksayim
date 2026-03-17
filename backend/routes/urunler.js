@@ -97,7 +97,8 @@ router.put('/:id', async (req, res) => {
   const { urun_adi, urun_kodu, isim_2, barkodlar, birim } = req.body;
 
   if (!urun_adi?.trim()) return res.status(400).json({ hata: 'İsim 1 (sayım ismi) boş olamaz.' });
-  if (!urun_kodu?.trim()) return res.status(400).json({ hata: 'Stok kodu boş olamaz.' });
+  // urun_kodu boşsa mevcut kodu koru
+  const kodGuncelle = urun_kodu?.trim() || null;
 
   const barkodArr = Array.isArray(barkodlar)
     ? barkodlar.map(b => b.trim()).filter(Boolean)
@@ -118,13 +119,17 @@ router.put('/:id', async (req, res) => {
       }
     }
 
+    // urun_kodu boş geldiyse mevcut değeri koru
+    const [mevcutRow] = kodGuncelle ? [[]] : await conn.execute('SELECT urun_kodu FROM isletme_urunler WHERE id = ?', [req.params.id]);
+    const finalKod = kodGuncelle || (mevcutRow[0]?.urun_kodu ?? '');
+
     await conn.execute(
       `UPDATE isletme_urunler SET
         urun_adi = ?, urun_kodu = ?, isim_2 = ?, barkodlar = ?, birim = ?,
         son_guncelleme = NOW(), guncelleme_kaynagi = 'kullanici',
         kullanici_guncelledi = 1, guncelleyen_kullanici_id = ?
       WHERE id = ?`,
-      [urun_adi.trim(), urun_kodu.trim(), (isim_2 || '').trim(), barkodStr, birim || null, req.user.id, req.params.id]
+      [urun_adi.trim(), finalKod, (isim_2 || '').trim(), barkodStr, birim || null, req.user.id, req.params.id]
     );
 
     await conn.commit();
@@ -196,6 +201,20 @@ router.delete('/:id', async (req, res) => {
   if (!await checkUrunYetki(req, res, 'sil')) return;
 
   try {
+    // Aktif sayımda kullanılıyor mu kontrol et
+    const [aktifSayimlar] = await pool.execute(
+      `SELECT DISTINCT s.ad FROM sayim_kalemleri sk
+       JOIN sayimlar s ON s.id = sk.sayim_id
+       WHERE sk.urun_id = ? AND s.durum = 'devam'`,
+      [req.params.id]
+    );
+    if (aktifSayimlar.length > 0) {
+      return res.status(409).json({
+        hata: 'Bu ürün aktif sayımlarda kullanılıyor.',
+        sayimlar: aktifSayimlar.map(s => s.ad),
+      });
+    }
+
     await pool.execute('UPDATE isletme_urunler SET aktif = 0 WHERE id = ?', [req.params.id]);
     res.json({ mesaj: 'Ürün silindi.' });
   } catch (err) {

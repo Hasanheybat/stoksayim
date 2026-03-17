@@ -2,7 +2,7 @@
 
 Kucuk ve orta olcekli isletmeler icin cok isletmeli, rol tabanli stok ve depo sayim yonetim sistemi.
 
-**v3** — Backend API + Admin Paneli
+**v3.3** — Backend API + Admin Paneli (Guvenlik Guncelleme)
 
 ---
 
@@ -63,7 +63,11 @@ Kucuk ve orta olcekli isletmeler icin cok isletmeli, rol tabanli stok ve depo sa
 ### Guvenlik
 - JWT tabanli kimlik dogrulama
 - CORS whitelist + Helmet.js guvenlik basiklari
-- Rate limiting (genel: 300/15dk, giris: 20/15dk)
+- Rate limiting (genel: 1500/15dk, giris: 20/15dk, sifre degistirme: 20/15dk)
+- Content Security Policy (CSP) — unsafe-inline yok
+- Transaction ile race condition korumasi (barkod, toplama, rol silme)
+- Input validation (miktar, rol, sifre uzunlugu)
+- Hata mesaji sizinti korumasi (err.message kullaniciya gosterilmez)
 - Soft delete — veriler asla silinmez
 - IDOR korumasi — sahiplik + yetki cift kontrol
 - Admin self-protection — kendi hesabini silemez/pasif yapamaz
@@ -533,6 +537,30 @@ stoksay/
 ---
 
 ## Surum Gecmisi
+
+### v3.3 — 2026-03-16
+
+- 16 guvenlik acigi kapatildi (QA-2026-03-16 bulguları)
+- Async handler crash korumasi (15+ endpoint'e try-catch)
+- isletme_ids yetki bypass duzeltildi
+- yetkiGuard null check + try-catch
+- err.message sizinti korumasi (5 route dosyasi)
+- Barkod race condition — transaction ile koruma
+- Toplama race condition — transaction ile koruma
+- Rol silme atomik transaction
+- Sifre minimum 6 karakter zorunlulugu
+- Rol enum validation
+- Miktar numeric validation
+- update-password rate limit
+- CSP unsafe-inline kaldirildi
+- ad_soyad null crash duzeltildi (AdminLayout)
+- error→hata tutarliligi (auth.js)
+
+### v3.2 — 2026-03-16
+
+- Content Security Policy (CSP) aktif edildi
+- Helmet.js guvenlik basiklari iyilestirildi
+- SECURITY.md olusturuldu (52 test pass)
 
 ### v3 — 2026-03-15
 
