@@ -34,7 +34,11 @@
 ### Sayim Butunlugu
 - Sadece tamamlanmis sayimlar birlestirilebilir (topla)
 - Topla islemi sirasinda kalemler FOR UPDATE ile kilitlenir
-- Sayim guncellemelerinde optimistic locking (updated_at kontrolu, HTTP 409)
+- Sayim guncellemelerinde optimistic locking (updated_at kontrolu, timezone normalizasyonu, HTTP 409)
+
+### CORS Hata Yonetimi
+- Bilinmeyen origin'den gelen istekler 403 ile reddedilir (500 degil)
+- Express error middleware CORS hatalarini yakalar ve uygun HTTP status dondurur
 
 ### Hata Yonetimi
 - Hassas hata detaylari istemciye gonderilmez

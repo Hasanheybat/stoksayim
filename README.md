@@ -2,7 +2,7 @@
 
 Kucuk ve orta olcekli isletmeler icin cok isletmeli, rol tabanli stok ve depo sayim yonetim platformu.
 
-**v4.1.1** — Kullanici Yonetimi + Pasif Kullanici Guvenligi (Mart 2026)
+**v4.1.2** — Guvenlik Denetimi + Penetrasyon Testi (Mart 2026)
 
 ---
 
@@ -80,16 +80,22 @@ deposayim/
 - Yetkisiz kullanici ekrani (dark tema + animasyonlu guncelle butonu)
 - Offline modda cikis engelleme (veri kaybi korumasi)
 
-### Guvenlik (v4.1.1)
+### Guvenlik (v4.1.2)
 - JWT tabanli kimlik dogrulama (7 gun sureli)
 - Helmet.js guvenlik basiklari + CSP (Content Security Policy)
-- CORS whitelist
-- Rate limiting (genel: 1500/15dk, giris: 20/15dk)
+- CORS whitelist + 403 hata handler
+- Rate limiting (Auth: 15 istek/15dk, Genel API: 100 istek/dk)
 - Soft delete — veriler asla silinmez
 - IDOR korumasi — sahiplik + yetki cift kontrol
-- Transaction ile race condition korumasi (barkod, toplama)
-- Input validation (miktar, rol, sifre uzunlugu)
+- Transaction ile race condition korumasi (depo silme, urun silme, barkod, toplama)
+- Cross-isletme korumasi (farkli isletme urunu kalem eklenemez)
+- Sayim topla guvenligi (sadece tamamlanmis sayimlar)
+- Optimistic locking (sayim guncelleme, timezone normalizasyonu)
+- Input validation (email, telefon, barkod, miktar, sifre min 8)
 - Hata mesaji sizinti korumasi (err.message gizlenir)
+- Pasif kullanici engeli (authGuard 403)
+- DB SSL destegi (ortam degiskeni ile)
+- 37/37 penetrasyon testi PASS
 
 ---
 
@@ -148,6 +154,7 @@ DB_PORT=3306
 DB_USER=stoksay
 DB_PASS=sifre
 DB_NAME=stoksay
+DB_SSL=false
 PORT=3001
 JWT_SECRET=min-32-karakter-gizli-anahtar
 ALLOWED_ORIGINS=http://localhost:5173,http://<IP>:3001
@@ -240,8 +247,8 @@ cd mobile && flutter run
 
 | Hesap | Email | Sifre | Rol |
 |-------|-------|-------|-----|
-| Admin | admin@stoksay.com | TestAdmin123 | admin |
-| Demo | demo001@stoksay.demo | 123 | kullanici |
+| Admin | admin@stoksay.com | TestAdmin99 | admin |
+| Demo | demo001@stoksay.demo | TestDemo99 | kullanici |
 
 ---
 
@@ -250,19 +257,30 @@ cd mobile && flutter run
 Her alt projede SECURITY.md dosyasi bulunur:
 
 - `stoksay/SECURITY.md` — Backend + Frontend guvenlik denetimi
+- `stoksay/backend/SECURITY.md` — Backend detayli guvenlik
 - `mobile/SECURITY.md` — Flutter mobil guvenlik denetimi
-- `QA-RAPOR-2026-03-16.md` — Son QA test raporu
+- `SECURITY-AUDIT-2026-03-17.md` — Penetrasyon testi raporu
 
-### Son Guvenlik Guncellemesi (v3.3 — 2026-03-16)
+### Son Guvenlik Guncellemesi (v4.1.2 — 2026-03-17)
 
-16 guvenlik acigi kapatildi:
+37 penetrasyon testi, 13 kategori:
 
-| Oncelik | Sayi | Ornekler |
-|---------|------|----------|
-| **Kritik** | 3 | Async handler crash korumasi, isletme_ids yetki bypass, yetkiGuard null check |
-| **Yuksek** | 4 | err.message sizinti, barkod race condition (transaction), toplama race condition, rol silme atomik islem |
-| **Orta** | 7 | Sifre min uzunluk, rol validation, miktar validation, rate limit, CSP, ad_soyad crash, Flutter JSON parse |
-| **Dusuk** | 2 | error→hata tutarliligi, ek input dogrulama |
+| Kategori | Test Sayisi | Sonuc |
+|----------|-------------|-------|
+| Auth bypass + JWT manipulasyon | 4 | PASS |
+| SQL Injection | 3 | PASS |
+| IDOR (kaynak erisim) | 3 | PASS |
+| Input validation (email, telefon, barkod) | 3 | PASS |
+| Optimistic locking (concurrent update) | 3 | PASS |
+| Cross-isletme izolasyonu | 2 | PASS |
+| Is mantigi (topla, pasif kullanici) | 4 | PASS |
+| CORS | 3 | PASS |
+| Guvenlik basiklari (Helmet) | 4 | PASS |
+| Rate limiting | 2 | PASS |
+| Path traversal | 2 | PASS |
+| Veri sizintisi | 2 | PASS |
+| Depo silme kilidi | 2 | PASS |
+| **TOPLAM** | **37** | **37/37 PASS** |
 
 ---
 
@@ -270,6 +288,7 @@ Her alt projede SECURITY.md dosyasi bulunur:
 
 | Surum | Tarih | Aciklama |
 |-------|-------|----------|
+| **v4.1.2** | 2026-03-17 | Guvenlik denetimi: 37 penetrasyon testi, CORS 403 handler, optimistic locking timezone fix |
 | **v4.1.1** | 2026-03-17 | Pasif kullanici guvenligi, rol kaldirma yetki sifirlama, admin panel iyilestirmeleri |
 | **v4.0** | 2026-03-17 | Offline/online mod, senkronizasyon, aktif sayim korumasi |
 | **v3.3** | 2026-03-16 | 16 guvenlik acigi kapatildi, QA test raporu |

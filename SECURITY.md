@@ -1,6 +1,6 @@
 # StokSay Guvenlik Raporu
 
-**Son Tarama:** 2026-03-17 (v4.1.1)
+**Son Tarama:** 2026-03-17 (v4.1.2)
 **Kapsam:** Backend API + Admin Paneli (Web)
 
 ---
@@ -15,7 +15,7 @@
 | IDOR korumasi | OK | Tum endpoint'lerde sahiplik + yetki kontrolu |
 | Hata mesaji sizintisi | OK | err.message kullaniciya gosterilmiyor, loglaniyor |
 | Rate limiting | OK | Auth: 15 istek/15dk, Genel API: 100 istek/dk |
-| CORS | OK | Whitelist tabanli, bilinmeyen origin reddediliyor |
+| CORS | OK | Whitelist tabanli, bilinmeyen origin 403 ile reddediliyor |
 | Helmet.js | OK | X-Content-Type-Options, HSTS, X-Frame-Options, Referrer-Policy |
 | X-Powered-By | OK | Kaldirildi (Helmet) |
 | password_hash gizliligi | OK | Hicbir API response'da donmuyor |
@@ -27,7 +27,7 @@
 | Race condition korumasi | OK | Depo/urun silme: Transaction + FOR UPDATE |
 | Cross-isletme korumasi | OK | Sayim kalemine farkli isletme urunu eklenemez |
 | Sayim topla guvenligi | OK | Sadece tamamlanmis sayimlar birlestirilir |
-| Optimistic locking | OK | Sayim update'de updated_at kontrolu (409) |
+| Optimistic locking | OK | Sayim update'de updated_at kontrolu (409, timezone normalizasyonu) |
 | Pasif kullanici engeli | OK | authGuard 403: pasif kullanici hicbir API'ye erisemez |
 | Yetki atama UPSERT | OK | kullanici_isletme kaydi yoksa INSERT, varsa UPDATE |
 | Rol kaldirma yetki sifirlama | OK | Rol silinince tum yetkiler false olur |
@@ -210,19 +210,27 @@
 
 ---
 
-## Test Sonuclari (2026-03-15)
+## Test Sonuclari (2026-03-17, v4.1.2)
 
-| Kategori | Sonuc |
-|----------|-------|
-| Auth guvenlik (login, token, JWT) | 8/8 PASS |
-| SQL Injection (login, query param, UNION) | 6/6 PASS |
-| IDOR (kaynak erisim, kalem endpoint) | 4/4 PASS |
-| Error message leakage | 3/3 PASS |
-| XSS input handling | 3/3 PASS |
-| Rate limiting (login, API) | 2/2 PASS |
-| CORS (whitelist, reject) | 2/2 PASS |
-| Helmet headers | 7/7 PASS |
-| JWT manipulation (tamper, none alg, empty sig) | 3/3 PASS |
-| Path traversal | 1/1 PASS |
-| Long input / edge cases | 4/4 PASS |
-| **TOPLAM** | **52/52 PASS** |
+### Penetrasyon Testi — 37/37 PASS
+
+| Kategori | Test Sayisi | Sonuc |
+|----------|-------------|-------|
+| Auth bypass + JWT manipulasyon | 4 | 4/4 PASS |
+| SQL Injection (login, query, UNION) | 3 | 3/3 PASS |
+| IDOR (kaynak erisim, kalem) | 3 | 3/3 PASS |
+| Input validation (email, telefon, barkod) | 3 | 3/3 PASS |
+| Optimistic locking (concurrent update) | 3 | 3/3 PASS |
+| Cross-isletme izolasyonu | 2 | 2/2 PASS |
+| Is mantigi (topla, pasif kullanici) | 4 | 4/4 PASS |
+| CORS (whitelist, reject, 403) | 3 | 3/3 PASS |
+| Guvenlik basiklari (Helmet) | 4 | 4/4 PASS |
+| Rate limiting (auth, genel) | 2 | 2/2 PASS |
+| Path traversal | 2 | 2/2 PASS |
+| Veri sizintisi (password_hash, stack trace) | 2 | 2/2 PASS |
+| Depo silme kilidi (aktif sayim) | 2 | 2/2 PASS |
+| **TOPLAM** | **37** | **37/37 PASS** |
+
+### Onceki Test Sonuclari (2026-03-15)
+
+52/52 PASS — Auth, SQLi, IDOR, XSS, rate limit, CORS, Helmet, JWT, path traversal, edge case
