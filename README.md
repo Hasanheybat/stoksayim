@@ -2,7 +2,7 @@
 
 Kucuk ve orta olcekli isletmeler icin cok isletmeli, rol tabanli stok ve depo sayim yonetim sistemi.
 
-**v3.3** — Backend API + Admin Paneli (Guvenlik Guncelleme)
+**v4.1.1** — Backend API + Admin Paneli (Kullanici Yonetimi + Guvenlik)
 
 ---
 
@@ -537,6 +537,26 @@ stoksay/
 ---
 
 ## Surum Gecmisi
+
+### v4.1.1 — 2026-03-17
+
+- Pasif kullanici admin panelde kirmizi kart stili (bg-red-50, border-red-200)
+- Pasif kullanicida duzenleme butonu kaldirildi, salt okunur popup eklendi
+- Rol kaldirma yetki sifirlama: rol silinince tum yetkiler false olur
+- Yetki atama UPSERT: kullanici_isletme kaydi yoksa INSERT, varsa UPDATE
+- Admin panel kalem detay: Urunler, Sayimlar, Depolar, Toplanmis Sayimlarda tiklayarak detay acma
+- Tip guvenligi: rol ID karsilastirmada String() ile normalize
+
+### v4.0 — 2026-03-17
+
+- Offline/online mod, senkronizasyon, aktif sayim korumasi
+- Race condition korumasi: depo/urun silme transaction + FOR UPDATE
+- Cross-isletme kontrol: farkli isletme urunu sayima eklenemez
+- Sayim toplama guvenligi: sadece tamamlanmis sayimlar birlestirilir
+- Email, telefon, barkod format dogrulamasi
+- Optimistic locking: sayim update'de updated_at kontrolu
+- Sifre politikasi: minimum 8 karakter
+- Genel rate limiting: 100 istek/dakika
 
 ### v3.3 — 2026-03-16
 

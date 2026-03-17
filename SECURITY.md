@@ -1,6 +1,6 @@
 # StokSay Guvenlik Raporu
 
-**Son Tarama:** 2026-03-17
+**Son Tarama:** 2026-03-17 (v4.1.1)
 **Kapsam:** Backend API + Admin Paneli (Web)
 
 ---
@@ -28,6 +28,10 @@
 | Cross-isletme korumasi | OK | Sayim kalemine farkli isletme urunu eklenemez |
 | Sayim topla guvenligi | OK | Sadece tamamlanmis sayimlar birlestirilir |
 | Optimistic locking | OK | Sayim update'de updated_at kontrolu (409) |
+| Pasif kullanici engeli | OK | authGuard 403: pasif kullanici hicbir API'ye erisemez |
+| Yetki atama UPSERT | OK | kullanici_isletme kaydi yoksa INSERT, varsa UPDATE |
+| Rol kaldirma yetki sifirlama | OK | Rol silinince tum yetkiler false olur |
+| Pasif kullanici admin UI | OK | Kirmizi kart, duzenleme butonu yok, salt okunur popup |
 | Email dogrulama | OK | Login, kayit, guncelleme'de regex kontrolu |
 | Telefon dogrulama | OK | 7-20 karakter format kontrolu |
 | Barkod dogrulama | OK | Alfanumerik + tire, 1-50 karakter |

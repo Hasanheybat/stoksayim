@@ -135,7 +135,16 @@ function exportPDF(sayim, kalemler) {
     ['Tarih',     sayim.tarih ? new Date(sayim.tarih).toLocaleDateString('tr-TR') : null],
     ['Kullanıcı', sayim.kullanicilar?.ad_soyad],
     ['Durum',     sayim.durum === 'tamamlandi' ? 'Tamamlandı' : 'Devam Ediyor'],
-    ['Notlar',    sayim.notlar],
+    ...(() => {
+      try {
+        if (sayim.notlar && sayim.notlar.includes('toplanan_sayimlar')) {
+          const p = JSON.parse(sayim.notlar);
+          const kk = (p.toplanan_sayimlar || []).map(k => k.depo || '').filter(Boolean).join(', ');
+          return kk ? [['Kaynak Depolar', kk]] : [];
+        }
+        return sayim.notlar ? [['Notlar', sayim.notlar]] : [];
+      } catch { return sayim.notlar ? [['Notlar', sayim.notlar]] : []; }
+    })(),
   ].filter(([, v]) => v);
 
   bilgiler.forEach(([k, v]) => {
@@ -178,7 +187,16 @@ function exportExcel(sayim, kalemler) {
     ['Tarih',      sayim.tarih ? new Date(sayim.tarih).toLocaleDateString('tr-TR') : ''],
     ['Kullanıcı',  sayim.kullanicilar?.ad_soyad || ''],
     ['Durum',      sayim.durum === 'tamamlandi' ? 'Tamamlandı' : 'Devam Ediyor'],
-    ['Notlar',     sayim.notlar || ''],
+    ...(() => {
+      try {
+        if (sayim.notlar && sayim.notlar.includes('toplanan_sayimlar')) {
+          const p = JSON.parse(sayim.notlar);
+          const kk = (p.toplanan_sayimlar || []).map(k => k.depo || '').filter(Boolean).join(', ');
+          return kk ? [['Kaynak Depolar', kk]] : [];
+        }
+        return sayim.notlar ? [['Notlar', sayim.notlar]] : [];
+      } catch { return sayim.notlar ? [['Notlar', sayim.notlar]] : []; }
+    })(),
     [],
     ['#', 'Ürün Adı', 'İkinci İsim', 'Ürün Kodu', 'Miktar', 'Birim'],
     ...kalemler.map((k, i) => [
@@ -297,12 +315,26 @@ function SayimDetayModal({ sayimId, onClose, onStatusChange }) {
           <>
             {/* Bilgi satırları */}
             <div className="px-5 py-4 space-y-2.5 border-b border-gray-100">
-              {[
-                { label: 'Depo',     value: sayim.depolar?.ad },
-                { label: 'Tarih',    value: sayim.tarih ? new Date(sayim.tarih).toLocaleDateString('tr-TR') : null },
-                { label: 'Kullanıcı', value: sayim.kullanicilar?.ad_soyad },
-                { label: 'Notlar',   value: sayim.notlar },
-              ].filter(r => r.value).map(r => (
+              {(() => {
+                let notlarGosterim = sayim.notlar;
+                try {
+                  if (sayim.notlar && sayim.notlar.includes('toplanan_sayimlar')) {
+                    const parsed = JSON.parse(sayim.notlar);
+                    const kaynaklar = parsed.toplanan_sayimlar || [];
+                    if (kaynaklar.length > 0) {
+                      notlarGosterim = kaynaklar.map(k => k.depo || k.ad || '').filter(Boolean).join(', ');
+                    } else {
+                      notlarGosterim = null;
+                    }
+                  }
+                } catch { /* raw göster */ }
+                return [
+                  { label: 'Depo',     value: sayim.depolar?.ad },
+                  { label: 'Tarih',    value: sayim.tarih ? new Date(sayim.tarih).toLocaleDateString('tr-TR') : null },
+                  { label: 'Kullanıcı', value: sayim.kullanicilar?.ad_soyad },
+                  ...(notlarGosterim ? [{ label: 'Kaynak Depolar', value: notlarGosterim }] : []),
+                ];
+              })().filter(r => r.value).map(r => (
                 <div key={r.label} className="flex items-center justify-between gap-4">
                   <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{r.label}</span>
                   <span className="text-sm text-gray-700 text-right">{r.value}</span>
@@ -321,19 +353,52 @@ function SayimDetayModal({ sayimId, onClose, onStatusChange }) {
               {kalemler.length === 0 ? (
                 <div className="text-center py-8 text-sm text-gray-400">Kalem eklenmemiş</div>
               ) : (
-                <div className="divide-y divide-gray-50 max-h-52 overflow-y-auto">
-                  {kalemler.map(k => (
-                    <div key={k.id} className="flex items-center justify-between px-5 py-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">{k.isletme_urunler?.urun_adi || '—'}</p>
-                        {k.isletme_urunler?.isim_2 && (
-                          <p className="text-xs text-indigo-500 truncate">{k.isletme_urunler.isim_2}</p>
+                <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+                  {kalemler.map(k => {
+                    const urun = k.isletme_urunler || {};
+                    const pasif = urun.aktif === 0 || urun.aktif === false;
+                    return (
+                      <div key={k.id}
+                        className="px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                        onClick={() => setKalemler(prev => prev.map(p => p.id === k.id ? { ...p, _acik: !p._acik } : p))}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className={`text-sm font-medium truncate ${pasif ? 'text-red-500' : 'text-gray-900'}`}>{urun.urun_adi || '—'}</p>
+                              {pasif && (
+                                <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded">Pasif</span>
+                              )}
+                            </div>
+                            {urun.isim_2 && <p className="text-xs text-indigo-500 truncate">{urun.isim_2}</p>}
+                          </div>
+                          <div className="ml-3 flex items-center gap-2">
+                            <span className="text-sm font-bold text-gray-700">
+                              {k.miktar} <span className="text-xs font-normal text-gray-400">{k.birim || ''}</span>
+                            </span>
+                            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${k._acik ? 'rotate-180' : ''}`} />
+                          </div>
+                        </div>
+                        {k._acik && (
+                          <div className="mt-2 p-2.5 bg-gray-50 rounded-lg border border-gray-100 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                            {urun.urun_kodu && (
+                              <><span className="text-gray-400 font-medium">Ürün Kodu</span><span className="text-gray-700 font-semibold text-right">{urun.urun_kodu}</span></>
+                            )}
+                            {urun.isim_2 && (
+                              <><span className="text-gray-400 font-medium">İkinci İsim</span><span className="text-gray-700 font-semibold text-right">{urun.isim_2}</span></>
+                            )}
+                            {urun.barkodlar && (
+                              <><span className="text-gray-400 font-medium">Barkod</span><span className="text-gray-700 font-semibold text-right">{urun.barkodlar}</span></>
+                            )}
+                            <span className="text-gray-400 font-medium">Birim</span><span className="text-gray-700 font-semibold text-right">{k.birim || 'ADET'}</span>
+                            {pasif && (
+                              <><span className="text-gray-400 font-medium">Durum</span><span className="text-red-600 font-semibold text-right">Pasif Ürün</span></>
+                            )}
+                          </div>
                         )}
-                        <p className="text-xs text-gray-400">{k.isletme_urunler?.urun_kodu}</p>
                       </div>
-                      <span className="ml-3 text-sm font-bold text-gray-700">{k.miktar} <span className="text-xs font-normal text-gray-400">{k.birim || ''}</span></span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -388,7 +453,7 @@ function SayimDetayModal({ sayimId, onClose, onStatusChange }) {
 const DURUM_MAP = {
   devam:       { label: 'Devam Ediyor', bg: '#EFF6FF', color: '#2563EB', dot: '#3B82F6' },
   tamamlandi:  { label: 'Tamamlandı',   bg: '#F0FDF4', color: '#15803D', dot: '#22C55E' },
-  silindi:     { label: 'Silinmiş',     bg: '#FEF2F2', color: '#DC2626', dot: '#EF4444' },
+  silindi:     { label: 'Pasif',        bg: '#FEF2F2', color: '#DC2626', dot: '#EF4444' },
 };
 
 function SayimlarPanel({ depo, onClose }) {
@@ -686,10 +751,10 @@ export default function DepolarPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <h3 className={`font-semibold text-sm truncate leading-tight ${pasif ? 'text-red-400 line-through' : 'text-gray-900'}`}>{d.ad}</h3>
+                      <h3 className={`font-semibold text-sm truncate leading-tight ${pasif ? 'text-red-500' : 'text-gray-900'}`}>{d.ad}</h3>
                       {pasif && (
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
-                          style={{ background: '#FEE2E2', color: '#DC2626' }}>Silinmiş</span>
+                          style={{ background: '#FEE2E2', color: '#DC2626' }}>Pasif</span>
                       )}
                     </div>
                     <div className="flex items-center gap-1 mt-0.5 flex-wrap">
@@ -710,31 +775,29 @@ export default function DepolarPage() {
                   </div>
                 )}
                 {/* Butonlar */}
-                <div className="flex gap-1.5 border-t border-gray-100 pt-2">
+                <div className={`flex gap-1.5 border-t pt-2 ${pasif ? 'border-red-200' : 'border-gray-100'}`}>
+                  <button onClick={() => setSayimlarDepo(d)}
+                    className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors">
+                    <ClipboardList className="w-3 h-3" />Sayımlar
+                    {d.sayimSayisi > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black"
+                        style={{ background: '#F0FDF4', color: '#15803D' }}>
+                        {d.sayimSayisi}
+                      </span>
+                    )}
+                  </button>
                   {pasif ? (
                     <button onClick={() => setGeriAlDepo(d)}
-                      className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold border border-green-200 hover:bg-green-100 text-green-600 transition-colors"
+                      className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-green-200 hover:bg-green-100 text-green-600 transition-colors"
                       style={{ background: '#DCFCE7' }}>
                       <RotateCcw className="w-3 h-3" />Geri Al
                     </button>
                   ) : (
-                    <>
-                      <button onClick={() => setSayimlarDepo(d)}
-                        className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors">
-                        <ClipboardList className="w-3 h-3" />Sayımlar
-                        {d.sayimSayisi > 0 && (
-                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black"
-                            style={{ background: '#F0FDF4', color: '#15803D' }}>
-                            {d.sayimSayisi}
-                          </span>
-                        )}
-                      </button>
-                      <button onClick={() => { setEditing(d); setModalOpen(true); }}
-                        className="w-8 flex items-center justify-center py-1.5 rounded-lg border border-gray-200 hover:bg-indigo-50 transition-colors"
-                        style={{background:'#EEF2FF'}} title="Düzenle">
-                        <Pencil className="w-3.5 h-3.5" style={{color:'#6366F1'}}/>
-                      </button>
-                    </>
+                    <button onClick={() => { setEditing(d); setModalOpen(true); }}
+                      className="w-8 flex items-center justify-center py-1.5 rounded-lg border border-gray-200 hover:bg-indigo-50 transition-colors"
+                      style={{background:'#EEF2FF'}} title="Düzenle">
+                      <Pencil className="w-3.5 h-3.5" style={{color:'#6366F1'}}/>
+                    </button>
                   )}
                 </div>
               </div>

@@ -367,20 +367,40 @@ router.put('/:id/yetkiler', async (req, res) => {
   }
 
   try {
-    const fields = ['yetkiler = ?'];
-    const params = [JSON.stringify(yetkiler)];
-
-    if (rol_id !== undefined) {
-      fields.push('rol_id = ?');
-      params.push(rol_id || null);
-    }
-
-    params.push(req.params.id, isletme_id);
-
-    await pool.execute(
-      `UPDATE kullanici_isletme SET ${fields.join(', ')} WHERE kullanici_id = ? AND isletme_id = ?`,
-      params
+    // Önce mevcut kayıt var mı kontrol et
+    const [mevcut] = await pool.execute(
+      'SELECT id FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ?',
+      [req.params.id, isletme_id]
     );
+
+    if (mevcut.length === 0) {
+      // Kayıt yok — INSERT yap
+      const crypto = require('crypto');
+      const yeniId = crypto.randomUUID();
+      await pool.execute(
+        `INSERT INTO kullanici_isletme (id, kullanici_id, isletme_id, aktif, yetkiler${rol_id !== undefined ? ', rol_id' : ''})
+         VALUES (?, ?, ?, 1, ?${rol_id !== undefined ? ', ?' : ''})`,
+        rol_id !== undefined
+          ? [yeniId, req.params.id, isletme_id, JSON.stringify(yetkiler), rol_id || null]
+          : [yeniId, req.params.id, isletme_id, JSON.stringify(yetkiler)]
+      );
+    } else {
+      // Kayıt var — UPDATE yap
+      const fields = ['yetkiler = ?', 'aktif = 1'];
+      const params = [JSON.stringify(yetkiler)];
+
+      if (rol_id !== undefined) {
+        fields.push('rol_id = ?');
+        params.push(rol_id || null);
+      }
+
+      params.push(req.params.id, isletme_id);
+
+      await pool.execute(
+        `UPDATE kullanici_isletme SET ${fields.join(', ')} WHERE kullanici_id = ? AND isletme_id = ?`,
+        params
+      );
+    }
 
     const [rows] = await pool.execute(
       'SELECT * FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ?',

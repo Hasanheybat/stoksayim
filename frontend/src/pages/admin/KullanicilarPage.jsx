@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Users, ShieldCheck, UserCheck, Plus, Pencil, Power, Search, Building2, ChevronDown, Check, X, AlertTriangle, Save, Shield, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { Users, ShieldCheck, UserCheck, Plus, Pencil, Power, Search, Building2, ChevronDown, Check, X, AlertTriangle, Save, Shield, ChevronLeft, ChevronRight, RotateCcw, Eye, Mail, Phone } from 'lucide-react';
 import api from '../../lib/apiAdm';
 
 /* ── Yetki sabitleri ── */
@@ -312,6 +312,7 @@ export default function KullanicilarPage() {
   const [isletmeDropdownAcik, setIsletmeDropdownAcik] = useState(false);
   const isletmeInputRef = useRef(null);
   const [acikIsletmeId, setAcikIsletmeId] = useState(null);
+  const [goruntuleKul, setGoruntuleKul] = useState(null); // pasif kullanıcı salt okunur popup
 
   // Debounce search
   useEffect(() => {
@@ -361,6 +362,10 @@ export default function KullanicilarPage() {
 
   const handleSave = async e => {
     e.preventDefault();
+    if (!form.sifre || form.sifre.length < 8) {
+      toast.error('Şifre en az 8 karakter olmalıdır.');
+      return;
+    }
     setSaving(true);
     try {
       await api.post('/kullanicilar', form);
@@ -417,6 +422,10 @@ export default function KullanicilarPage() {
   };
 
   const handleDuzenleKaydet = async () => {
+    if (duzenleForm.yeni_sifre.trim() && duzenleForm.yeni_sifre.trim().length < 8) {
+      toast.error('Şifre en az 8 karakter olmalıdır.');
+      return;
+    }
     setDuzenleKayit(true);
     try {
       // 1) Temel bilgileri güncelle
@@ -443,10 +452,19 @@ export default function KullanicilarPage() {
 
       // 3) Rol → yetkiler tüm işletmelere kaydet
       if (duzenleForm.rol !== 'admin' && yeniIds.length > 0) {
-        const secRol = rollerList.find(r => r.id === duzenleRolId);
+        const secRol = duzenleRolId
+          ? rollerList.find(r => String(r.id) === String(duzenleRolId))
+          : null;
+        // Rol seçilmediyse → tüm yetkiler kapalı (rolsüz kullanıcı)
+        const bosYetkiler = {
+          urun:         { goruntule: false, ekle: false, duzenle: false, sil: false },
+          depo:         { goruntule: false, ekle: false, duzenle: false, sil: false },
+          sayim:        { goruntule: false, ekle: false, duzenle: false, sil: false },
+          toplam_sayim: { goruntule: false, ekle: false, duzenle: false, sil: false },
+        };
         const yetkiler = secRol
           ? JSON.parse(JSON.stringify(secRol.yetkiler))
-          : getDefaultYetkiler();
+          : bosYetkiler;
         await Promise.all(
           yeniIds.map(id => api.put(`/kullanicilar/${duzenleKul.id}/yetkiler`, {
             isletme_id: id,
@@ -560,7 +578,7 @@ export default function KullanicilarPage() {
                 ? k.isletmeler[0].atanan_rol_adi || null
                 : null;
               return (
-                <div key={k.id} className="bg-white rounded-xl px-3 py-2.5 border border-gray-100 hover:border-indigo-100 hover:shadow-sm transition-all flex flex-col gap-1.5">
+                <div key={k.id} onClick={() => !k.aktif && setGoruntuleKul(k)} className={`rounded-xl px-3 py-2.5 border transition-all flex flex-col gap-1.5 ${k.aktif ? 'bg-white border-gray-100 hover:border-indigo-100 hover:shadow-sm' : 'bg-red-50 border-red-200 opacity-75 cursor-pointer hover:border-red-300'}`}>
 
                   {/* ── Üst: Avatar + İsim + Butonlar ── */}
                   <div className="flex items-center gap-2">
@@ -578,7 +596,7 @@ export default function KullanicilarPage() {
                     </div>
                     <div className="min-w-0 flex-1 flex flex-col gap-0.5">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <h3 className="font-semibold text-gray-900 text-sm leading-tight truncate">{k.ad_soyad}</h3>
+                        <h3 className={`font-semibold text-sm leading-tight truncate ${k.aktif ? 'text-gray-900' : 'text-red-600'}`}>{k.ad_soyad}</h3>
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
                           style={k.aktif ? { background: '#DCFCE7', color: '#16A34A' } : { background: '#FEE2E2', color: '#DC2626' }}>
                           {k.aktif ? 'Aktif' : 'Pasif'}
@@ -604,11 +622,13 @@ export default function KullanicilarPage() {
                       </div>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
-                      <button onClick={() => handleDuzenleAc(k)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-indigo-100 transition-colors"
-                        style={{ background: '#EEF2FF' }} title="Düzenle">
-                        <Pencil className="w-3.5 h-3.5" style={{ color: '#6366F1' }} />
-                      </button>
+                      {k.aktif && (
+                        <button onClick={() => handleDuzenleAc(k)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-indigo-100 transition-colors"
+                          style={{ background: '#EEF2FF' }} title="Düzenle">
+                          <Pencil className="w-3.5 h-3.5" style={{ color: '#6366F1' }} />
+                        </button>
+                      )}
                       {k.aktif ? (
                         <button onClick={() => setPasifOnay({ id: k.id, ad_soyad: k.ad_soyad })}
                           className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-100 transition-colors"
@@ -813,14 +833,16 @@ export default function KullanicilarPage() {
               {[
                 { l: 'Ad Soyad *', k: 'ad_soyad', t: 'text'     },
                 { l: 'E-posta *',  k: 'email',    t: 'email'    },
-                { l: 'Şifre *',    k: 'sifre',    t: 'password' },
+                { l: 'Şifre *',    k: 'sifre',    t: 'password', min: 8 },
                 { l: 'Telefon',    k: 'telefon',  t: 'tel'      },
               ].map(f => (
                 <div key={f.k}>
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{f.l}</label>
                   <input type={f.t} value={form[f.k]} required={f.l.includes('*')}
+                    minLength={f.min || undefined}
                     onChange={e => setForm({ ...form, [f.k]: e.target.value })}
                     className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-indigo-400 bg-gray-50" />
+                  {f.min && <p className="text-[10px] text-gray-400 mt-1">En az {f.min} karakter</p>}
                 </div>
               ))}
               <div>
@@ -1077,6 +1099,75 @@ export default function KullanicilarPage() {
                   : <Save className="w-4 h-4" />
                 }
                 Kaydet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pasif Kullanıcı Bilgi Popup */}
+      {goruntuleKul && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
+          onClick={() => setGoruntuleKul(null)}>
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="px-6 pt-5 pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                  style={{ background: getAvatarColor(goruntuleKul.ad_soyad) }}>
+                  {getInitials(goruntuleKul.ad_soyad)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-gray-900 text-sm truncate">{goruntuleKul.ad_soyad}</h3>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                    style={{ background: '#FEE2E2', color: '#DC2626' }}>Pasif</span>
+                </div>
+                <button onClick={() => setGoruntuleKul(null)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100">
+                  <X className="w-4 h-4 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            {/* Bilgiler */}
+            <div className="px-6 py-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <span className="text-sm text-gray-700 truncate">{goruntuleKul.email || '—'}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <span className="text-sm text-gray-700">{goruntuleKul.telefon || '—'}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Shield className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <span className="text-sm text-gray-700">
+                  {goruntuleKul.rol === 'admin' ? 'Admin' : (goruntuleKul.isletmeler?.[0]?.atanan_rol_adi || 'Kullanıcı')}
+                </span>
+              </div>
+              {(goruntuleKul.isletmeler || []).length > 0 && (
+                <div className="flex items-start gap-3">
+                  <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-gray-700">
+                    {goruntuleKul.isletmeler.map(i => (
+                      <span key={i.id} className="inline-block mr-1.5 mb-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{i.ad}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* Alt — sadece Kapat + Geri Al */}
+            <div className="grid grid-cols-2 gap-3 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setGoruntuleKul(null)}
+                className="py-2.5 rounded-xl font-bold text-sm text-gray-500 transition-colors"
+                style={{ background: '#F3F4F6' }}>
+                Kapat
+              </button>
+              <button onClick={() => { setGeriAlKullanici(goruntuleKul); setGoruntuleKul(null); }}
+                className="py-2.5 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2"
+                style={{ background: '#10B981' }}>
+                <RotateCcw className="w-4 h-4" />Geri Al
               </button>
             </div>
           </div>

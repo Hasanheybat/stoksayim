@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
   Package, Building2, Upload, Plus, Search,
-  ChevronLeft, ChevronRight, Pencil, Trash2, X, Check, RotateCcw,
+  ChevronLeft, ChevronRight, Pencil, Trash2, X, Check, RotateCcw, ChevronDown,
 } from 'lucide-react';
 import api from '../../lib/apiAdm';
 
@@ -492,16 +492,18 @@ export default function UrunlerPage() {
                 const pasif = u.aktif === 0 || u.aktif === false;
                 return (
                 <div key={u.id}
-                  className={`rounded-lg px-3 py-2.5 border transition-all group flex flex-col gap-1.5 ${pasif ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100 hover:border-indigo-100 hover:bg-indigo-50/30'}`}>
+                  className={`rounded-lg px-3 py-2.5 border transition-all group flex flex-col gap-1.5 cursor-pointer ${u._acik ? 'ring-1 ring-indigo-200' : ''} ${pasif ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100 hover:border-indigo-100 hover:bg-indigo-50/30'}`}
+                  onClick={() => setUrunler(prev => prev.map(p => p.id === u.id ? { ...p, _acik: !p._acik } : p))}
+                >
 
                   <div className="flex items-center gap-2">
                     {/* Bilgiler */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <p className={`text-sm font-semibold truncate leading-tight ${pasif ? 'text-red-400 line-through' : 'text-gray-800'}`}>{u.urun_adi}</p>
+                        <p className={`text-sm font-semibold truncate leading-tight ${pasif ? 'text-red-500' : 'text-gray-800'}`}>{u.urun_adi}</p>
                         {pasif && (
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
-                            style={{ background: '#FEE2E2', color: '#DC2626' }}>Silinmiş</span>
+                            style={{ background: '#FEE2E2', color: '#DC2626' }}>Pasif</span>
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
@@ -515,6 +517,8 @@ export default function UrunlerPage() {
                       </div>
                     </div>
 
+                    <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${u._acik ? 'rotate-180' : ''}`} />
+
                     {/* Düzenle (sadece aktif) */}
                     {!pasif && (
                       <button
@@ -525,6 +529,25 @@ export default function UrunlerPage() {
                       </button>
                     )}
                   </div>
+
+                  {/* Genişletilmiş detay bilgileri */}
+                  {u._acik && (
+                    <div className="border-t border-gray-100 pt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                      {u.urun_kodu && (
+                        <><span className="text-gray-400 font-medium">Ürün Kodu</span><span className="text-gray-700 font-semibold text-right">{u.urun_kodu}</span></>
+                      )}
+                      {u.isim_2 && (
+                        <><span className="text-gray-400 font-medium">İkinci İsim</span><span className="text-gray-700 font-semibold text-right">{u.isim_2}</span></>
+                      )}
+                      {u.barkodlar && (
+                        <><span className="text-gray-400 font-medium">Barkod</span><span className="text-gray-700 font-semibold text-right">{u.barkodlar}</span></>
+                      )}
+                      <span className="text-gray-400 font-medium">Birim</span><span className="text-gray-700 font-semibold text-right">{u.birim || 'ADET'}</span>
+                      {pasif && (
+                        <><span className="text-gray-400 font-medium">Durum</span><span className="text-red-600 font-semibold text-right">Pasif Ürün</span></>
+                      )}
+                    </div>
+                  )}
 
                   {/* Geri Al (pasif - tam genişlik alt kısım) */}
                   {pasif && (

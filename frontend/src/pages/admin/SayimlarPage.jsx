@@ -21,7 +21,7 @@ const GRAD = {
 const DURUM_MAP = {
   devam:      { label: 'Devam Ediyor', bg: '#EFF6FF', color: '#2563EB', dot: '#3B82F6' },
   tamamlandi: { label: 'Tamamlandı',   bg: '#F0FDF4', color: '#15803D', dot: '#22C55E' },
-  silindi:    { label: 'Silinmiş',     bg: '#FEF2F2', color: '#DC2626', dot: '#EF4444' },
+  silindi:    { label: 'Pasif',        bg: '#FEF2F2', color: '#DC2626', dot: '#EF4444' },
 };
 
 /* ── Page Header ── */
@@ -128,7 +128,16 @@ function exportPDF(sayim, kalemler) {
     ['Tarih',     sayim.tarih ? new Date(sayim.tarih).toLocaleDateString('tr-TR') : null],
     ['Kullanıcı', sayim.kullanicilar?.ad_soyad],
     ['Durum',     DURUM_MAP[sayim.durum]?.label || sayim.durum],
-    ['Notlar',    sayim.notlar],
+    ...(() => {
+      try {
+        if (sayim.notlar && sayim.notlar.includes('toplanan_sayimlar')) {
+          const p = JSON.parse(sayim.notlar);
+          const kk = (p.toplanan_sayimlar || []).map(k => k.depo || '').filter(Boolean).join(', ');
+          return kk ? [['Kaynak Depolar', kk]] : [];
+        }
+        return sayim.notlar ? [['Notlar', sayim.notlar]] : [];
+      } catch { return sayim.notlar ? [['Notlar', sayim.notlar]] : []; }
+    })(),
   ].filter(([, v]) => v);
   bilgiler.forEach(([k, v]) => {
     doc.setFont('helvetica', 'bold'); doc.text(`${k}:`, 14, y);
@@ -255,14 +264,29 @@ function SayimDetayModal({ sayimId, onClose, onStatusChange }) {
           <>
             {/* Bilgi satırları */}
             <div className="px-5 py-4 space-y-2.5 border-b border-gray-100">
-              {[
-                { label: 'Sayım ID', value: `#${sayim.id?.split('-')[0]?.toUpperCase()}` },
-                { label: 'İşletme',  value: sayim.isletmeler?.ad },
-                { label: 'Depo',     value: sayim.depolar?.ad },
-                { label: 'Tarih',    value: sayim.tarih ? new Date(sayim.tarih).toLocaleDateString('tr-TR') : null },
-                { label: 'Kullanıcı', value: sayim.kullanicilar?.ad_soyad },
-                { label: 'Notlar',   value: sayim.notlar },
-              ].filter(r => r.value).map(r => (
+              {(() => {
+                // Notlar alanını parse et — toplanan_sayimlar JSON'uysa depo isimlerini göster
+                let notlarGosterim = sayim.notlar;
+                try {
+                  if (sayim.notlar && sayim.notlar.includes('toplanan_sayimlar')) {
+                    const parsed = JSON.parse(sayim.notlar);
+                    const kaynaklar = parsed.toplanan_sayimlar || [];
+                    if (kaynaklar.length > 0) {
+                      notlarGosterim = kaynaklar.map(k => k.depo || k.ad || '').filter(Boolean).join(', ');
+                    } else {
+                      notlarGosterim = null;
+                    }
+                  }
+                } catch { /* raw göster */ }
+                return [
+                  { label: 'Sayım ID', value: `#${sayim.id?.split('-')[0]?.toUpperCase()}` },
+                  { label: 'İşletme',  value: sayim.isletmeler?.ad },
+                  { label: 'Depo',     value: sayim.depolar?.ad },
+                  { label: 'Tarih',    value: sayim.tarih ? new Date(sayim.tarih).toLocaleDateString('tr-TR') : null },
+                  { label: 'Kullanıcı', value: sayim.kullanicilar?.ad_soyad },
+                  ...(notlarGosterim ? [{ label: 'Kaynak Depolar', value: notlarGosterim }] : []),
+                ];
+              })().filter(r => r.value).map(r => (
                 <div key={r.label} className="flex items-center justify-between gap-4">
                   <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{r.label}</span>
                   <span className="text-sm text-gray-700 text-right">{r.value}</span>
@@ -281,21 +305,52 @@ function SayimDetayModal({ sayimId, onClose, onStatusChange }) {
               {kalemler.length === 0 ? (
                 <div className="text-center py-8 text-sm text-gray-400">Kalem eklenmemiş</div>
               ) : (
-                <div className="divide-y divide-gray-50 max-h-52 overflow-y-auto">
-                  {kalemler.map(k => (
-                    <div key={k.id} className="flex items-center justify-between px-5 py-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">{k.isletme_urunler?.urun_adi || '—'}</p>
-                        {k.isletme_urunler?.isim_2 && (
-                          <p className="text-xs text-indigo-500 truncate">{k.isletme_urunler.isim_2}</p>
+                <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+                  {kalemler.map(k => {
+                    const urun = k.isletme_urunler || {};
+                    const pasif = urun.aktif === 0 || urun.aktif === false;
+                    return (
+                      <div key={k.id}
+                        className="px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                        onClick={() => setKalemler(prev => prev.map(p => p.id === k.id ? { ...p, _acik: !p._acik } : p))}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className={`text-sm font-medium truncate ${pasif ? 'text-red-500' : 'text-gray-900'}`}>{urun.urun_adi || '—'}</p>
+                              {pasif && (
+                                <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded">Pasif</span>
+                              )}
+                            </div>
+                            {urun.isim_2 && <p className="text-xs text-indigo-500 truncate">{urun.isim_2}</p>}
+                          </div>
+                          <div className="ml-3 flex items-center gap-2">
+                            <span className="text-sm font-bold text-gray-700">
+                              {k.miktar} <span className="text-xs font-normal text-gray-400">{k.birim || ''}</span>
+                            </span>
+                            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${k._acik ? 'rotate-180' : ''}`} />
+                          </div>
+                        </div>
+                        {k._acik && (
+                          <div className="mt-2 p-2.5 bg-gray-50 rounded-lg border border-gray-100 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                            {urun.urun_kodu && (
+                              <><span className="text-gray-400 font-medium">Ürün Kodu</span><span className="text-gray-700 font-semibold text-right">{urun.urun_kodu}</span></>
+                            )}
+                            {urun.isim_2 && (
+                              <><span className="text-gray-400 font-medium">İkinci İsim</span><span className="text-gray-700 font-semibold text-right">{urun.isim_2}</span></>
+                            )}
+                            {urun.barkodlar && (
+                              <><span className="text-gray-400 font-medium">Barkod</span><span className="text-gray-700 font-semibold text-right">{urun.barkodlar}</span></>
+                            )}
+                            <span className="text-gray-400 font-medium">Birim</span><span className="text-gray-700 font-semibold text-right">{k.birim || 'ADET'}</span>
+                            {pasif && (
+                              <><span className="text-gray-400 font-medium">Durum</span><span className="text-red-600 font-semibold text-right">Pasif Ürün</span></>
+                            )}
+                          </div>
                         )}
-                        <p className="text-xs text-gray-400">{k.isletme_urunler?.urun_kodu}</p>
                       </div>
-                      <span className="ml-3 text-sm font-bold text-gray-700">
-                        {k.miktar} <span className="text-xs font-normal text-gray-400">{k.birim || ''}</span>
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -517,8 +572,8 @@ export default function SayimlarAdminPage() {
               const silindi = s.durum === 'silindi';
               return (
                 <div key={s.id}
-                  className={`rounded-xl px-3 py-2.5 border transition-all text-left flex flex-col gap-2 ${silindi ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100 hover:border-teal-200 hover:shadow-sm cursor-pointer'}`}
-                  onClick={() => !silindi && setSeciliSayimId(s.id)}>
+                  className={`rounded-xl px-3 py-2.5 border transition-all text-left flex flex-col gap-2 cursor-pointer ${silindi ? 'bg-red-50 border-red-200 hover:border-red-300 hover:shadow-sm' : 'bg-white border-gray-100 hover:border-teal-200 hover:shadow-sm'}`}
+                  onClick={() => setSeciliSayimId(s.id)}>
 
                   {/* Üst: başlık + durum */}
                   <div className="flex items-start justify-between gap-2">
@@ -527,7 +582,7 @@ export default function SayimlarAdminPage() {
                         style={{ background: silindi ? 'linear-gradient(135deg,#EF4444,#DC2626)' : GRAD.teal }}>
                         {silindi ? <Trash2 className="w-3.5 h-3.5 text-white" /> : <ClipboardList className="w-3.5 h-3.5 text-white" />}
                       </div>
-                      <p className={`text-sm font-semibold truncate leading-tight ${silindi ? 'text-red-400 line-through' : 'text-gray-900'}`}>{s.ad}</p>
+                      <p className={`text-sm font-semibold truncate leading-tight ${silindi ? 'text-red-500' : 'text-gray-900'}`}>{s.ad}</p>
                     </div>
                     <span className="flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
                       style={{ background: d.bg, color: d.color }}>
@@ -552,17 +607,9 @@ export default function SayimlarAdminPage() {
                     )}
                   </div>
 
-                  {/* En alt: tarih + kullanıcı / geri al */}
-                  {silindi ? (
-                    <div className="border-t border-red-200 pt-1.5 mt-0.5">
-                      <button onClick={(e) => { e.stopPropagation(); setGeriAlSayim(s); }}
-                        className="flex items-center justify-center gap-1 w-full py-1.5 rounded-lg text-xs font-semibold border border-green-200 hover:bg-green-100 text-green-600 transition-colors"
-                        style={{ background: '#DCFCE7' }}>
-                        <RotateCcw className="w-3 h-3" />Geri Al
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3 text-xs text-gray-400 border-t border-gray-100 pt-1.5 mt-0.5">
+                  {/* En alt: tarih + kullanıcı + geri al */}
+                  <div className={`flex items-center gap-2 border-t pt-1.5 mt-0.5 ${silindi ? 'border-red-200' : 'border-gray-100'}`}>
+                    <div className="flex items-center gap-3 text-xs text-gray-400 flex-1 min-w-0">
                       {s.tarih && (
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
@@ -576,7 +623,14 @@ export default function SayimlarAdminPage() {
                         </span>
                       )}
                     </div>
-                  )}
+                    {silindi && (
+                      <button onClick={(e) => { e.stopPropagation(); setGeriAlSayim(s); }}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold border border-green-200 hover:bg-green-100 text-green-600 transition-colors flex-shrink-0"
+                        style={{ background: '#DCFCE7' }}>
+                        <RotateCcw className="w-3 h-3" />Geri Al
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
