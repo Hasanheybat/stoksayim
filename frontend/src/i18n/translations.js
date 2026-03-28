@@ -1839,6 +1839,11 @@ const translations = {
     az: 'Element tapılmadı',
     ru: 'Позиции не найдены',
   },
+  'warehouses.countsFound': {
+    tr: 'sayım bulundu',
+    az: 'sayım tapıldı',
+    ru: 'подсчётов найдено',
+  },
   'warehouses.noCounts': {
     tr: 'Bu depoya ait sayım yok',
     az: 'Bu anbara aid sayım yoxdur',

@@ -507,7 +507,7 @@ function SayimlarPanel({ depo, onClose }) {
           <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
             <ClipboardList className="w-4 h-4 text-gray-400" />
             <span className="text-sm text-gray-500">
-              <span className="font-bold text-gray-900">{sayimlar.length}</span> sayım bulundu
+              <span className="font-bold text-gray-900">{sayimlar.length}</span> {t('warehouses.countsFound')}
             </span>
           </div>
         )}
