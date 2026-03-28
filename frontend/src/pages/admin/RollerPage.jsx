@@ -6,6 +6,7 @@ import {
   Trash2, AlertTriangle, X, ChevronRight,
 } from 'lucide-react';
 import api from '../../lib/apiAdm';
+import { useLanguage } from '../../i18n';
 
 /* ── Yetki sabitleri ── */
 const FABRIKA_YETKILER = {
@@ -22,24 +23,36 @@ const ADMIN_YETKILER = {
   toplam_sayim: { goruntule: true, ekle: true, duzenle: true, sil: true },
 };
 
-const KATEGORILER = [
-  { key: 'urun',         label: 'Ürünler',         islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
-  { key: 'depo',         label: 'Depolar',          islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
-  { key: 'sayim',        label: 'Sayım',            islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
-  { key: 'toplam_sayim', label: 'Toplam Sayımlar',  islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
-];
+function getKategoriler(t) {
+  return [
+    { key: 'urun',         label: t('perm.products'),         islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+    { key: 'depo',         label: t('perm.warehouses'),          islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+    { key: 'sayim',        label: t('perm.counts'),            islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+    { key: 'toplam_sayim', label: t('perm.mergedCounts'),  islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+  ];
+}
 
-const ISLEM_LABELS = {
-  goruntule: 'Görüntüle',
-  ekle:      'Ekle',
-  duzenle:   'Düzenle',
-  sil:       'Sil',
-};
+function getIslemLabels(t) {
+  return {
+    goruntule: t('perm.view'),
+    ekle:      t('perm.add'),
+    duzenle:   t('perm.edit'),
+    sil:       t('perm.delete'),
+  };
+}
+
+// Static version for non-component functions
+const KATEGORILER_STATIC = [
+  { key: 'urun', islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+  { key: 'depo', islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+  { key: 'sayim', islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+  { key: 'toplam_sayim', islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+];
 
 /* ── Yetki özet sayısı ── */
 function yetkiSayisi(yetkiler) {
   let aktif = 0, toplam = 0;
-  for (const kat of KATEGORILER) {
+  for (const kat of KATEGORILER_STATIC) {
     for (const islem of kat.islemler) {
       toplam++;
       if (yetkiler?.[kat.key]?.[islem]) aktif++;
@@ -50,6 +63,9 @@ function yetkiSayisi(yetkiler) {
 
 /* ── Yetki Matrisi ── */
 function YetkiMatrisi({ yetkiler, onChange, readonly = false }) {
+  const { t } = useLanguage();
+  const KATEGORILER = getKategoriler(t);
+  const ISLEM_LABELS = getIslemLabels(t);
   return (
     <div className="space-y-4">
       {KATEGORILER.map(kat => (
@@ -109,6 +125,7 @@ function Avatar({ ad }) {
 
 /* ── Rol Silme Modalı ── */
 function RolSilModal({ rol, tumRoller, onClose, onConfirm }) {
+  const { t } = useLanguage();
   const [atanmislar, setAtanmislar] = useState([]);
   const [yukleniyor, setYukleniyor] = useState(true);
   const [siliyor, setSiliyor]       = useState(false);
@@ -118,7 +135,7 @@ function RolSilModal({ rol, tumRoller, onClose, onConfirm }) {
   useEffect(() => {
     api.get(`/roller/${rol.id}/atanmislar`)
       .then(r => setAtanmislar(r.data || []))
-      .catch(() => toast.error('Atanmış kullanıcılar yüklenemedi.'))
+      .catch(() => toast.error(t('toast.usersLoadFailed')))
       .finally(() => setYukleniyor(false));
   }, [rol.id]);
 
@@ -143,7 +160,7 @@ function RolSilModal({ rol, tumRoller, onClose, onConfirm }) {
   return (
     <div className="fixed inset-0 z-[60] flex flex-col justify-end sm:items-center sm:justify-center"
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
+      >
       <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
 
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
@@ -156,8 +173,8 @@ function RolSilModal({ rol, tumRoller, onClose, onConfirm }) {
             <Trash2 className="w-5 h-5 text-red-500" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-gray-900 text-sm">Rolü Sil: {rol.ad}</p>
-            <p className="text-xs text-gray-400">Bu rol kalıcı olarak silinecek</p>
+            <p className="font-bold text-gray-900 text-sm">{t('roles.deleteTitle')}: {rol.ad}</p>
+            <p className="text-xs text-gray-400">{t('roles.deleteSubtitle')}</p>
           </div>
           <button onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-100 text-gray-500 flex-shrink-0">
@@ -173,8 +190,8 @@ function RolSilModal({ rol, tumRoller, onClose, onConfirm }) {
             </div>
           ) : atanmislar.length === 0 ? (
             <div className="rounded-xl p-4 text-center" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-              <p className="text-sm text-emerald-700 font-medium">Bu role atanmış kullanıcı yok.</p>
-              <p className="text-xs text-emerald-500 mt-1">Rol güvenle silinebilir.</p>
+              <p className="text-sm text-emerald-700 font-medium">{t('roles.noUsersAssigned')}</p>
+              <p className="text-xs text-emerald-500 mt-1">{t('roles.safeToDelete')}</p>
             </div>
           ) : (
             <>
@@ -201,7 +218,7 @@ function RolSilModal({ rol, tumRoller, onClose, onConfirm }) {
                       onChange={e => setAtamalar(prev => ({ ...prev, [a.ki_id]: e.target.value }))}
                       className="text-xs font-medium px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white outline-none focus:border-indigo-400 min-w-[130px]"
                     >
-                      <option value="">Rol seçilmedi</option>
+                      <option value="">{t('roles.selectRole')}</option>
                       {digerRoller.map(r => (
                         <option key={r.id} value={r.id}>{r.ad}</option>
                       ))}
@@ -247,6 +264,7 @@ function RolSilModal({ rol, tumRoller, onClose, onConfirm }) {
 
 /* ── Rol Detay Modalı ── */
 function RolDetayModal({ rol, kullanicilar, tumRoller, onClose, onSave, onDelete }) {
+  const { t } = useLanguage();
   const [yetkiler,  setYetkiler]  = useState(rol.yetkiler || {});
   const [degisti,   setDegisti]   = useState(false);
   const [kayit,     setKayit]     = useState(false);
@@ -264,7 +282,7 @@ function RolDetayModal({ rol, kullanicilar, tumRoller, onClose, onSave, onDelete
       toast.success(`"${rol.ad}" yetkiler kaydedildi.`);
       onSave(data);
       setDegisti(false);
-    } catch { toast.error('Kayıt başarısız.'); }
+    } catch { toast.error(t('toast.saveFailed')); }
     finally { setKayit(false); }
   };
 
@@ -291,7 +309,7 @@ function RolDetayModal({ rol, kullanicilar, tumRoller, onClose, onSave, onDelete
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center"
       style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
+      >
       <div className="bg-white w-full sm:max-w-lg sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
 
         {/* Üst bant */}
@@ -318,14 +336,14 @@ function RolDetayModal({ rol, kullanicilar, tumRoller, onClose, onSave, onDelete
           <div className="flex-1 min-w-0">
             <h3 className="text-base font-black text-gray-900 leading-tight">{rol.ad}</h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              {isAdminRol ? 'Sistem rolü • Değiştirilemez' : rol.sistem ? 'Sistem rolü' : 'Özel rol'}
+              {isAdminRol ? t('roles.systemRoleNoChange') : rol.sistem ? t('roles.systemRole') : t('roles.customRole')}
             </p>
           </div>
           {/* Silme — özel rol */}
           {!rol.sistem && !isAdminRol && (
             <button onClick={() => setSilModal(true)}
               className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-red-50 transition-colors flex-shrink-0"
-              title="Rolü sil">
+              title={t('roles.deleteTitle')}>
               <Trash2 className="w-4 h-4 text-red-400" />
             </button>
           )}
@@ -351,7 +369,7 @@ function RolDetayModal({ rol, kullanicilar, tumRoller, onClose, onSave, onDelete
               style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
               <Lock className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#D97706' }} />
               <p className="text-xs leading-relaxed" style={{ color: '#92400E' }}>
-                Admin rolü tüm işlemlere tam erişime sahiptir. Bu rol değiştirilemez ve silinemez.
+                {t('roles.adminFullAccess')}
               </p>
             </div>
           )}
@@ -360,7 +378,7 @@ function RolDetayModal({ rol, kullanicilar, tumRoller, onClose, onSave, onDelete
               style={{ background: '#EEF2FF', border: '1px solid rgba(99,102,241,0.2)' }}>
               <Unlock className="w-4 h-4 flex-shrink-0 mt-0.5 text-indigo-500" />
               <p className="text-xs leading-relaxed text-indigo-700">
-                Sistem rolü — yetki matrisini düzenleyebilirsiniz. Ad değiştirilemez.
+                {t('roles.systemRoleInfo')}
               </p>
             </div>
           )}
@@ -369,7 +387,7 @@ function RolDetayModal({ rol, kullanicilar, tumRoller, onClose, onSave, onDelete
               style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
               <ShieldCheck className="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-600" />
               <p className="text-xs leading-relaxed text-emerald-700">
-                Özel rol — yetki matrisini ve adını düzenleyebilirsiniz.
+                {t('roles.customRoleInfo')}
               </p>
             </div>
           )}
@@ -387,7 +405,7 @@ function RolDetayModal({ rol, kullanicilar, tumRoller, onClose, onSave, onDelete
           {kulRol.length > 0 && (
             <div>
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5" /> Bu Roldeki Kullanıcılar
+                <Users className="w-3.5 h-3.5" /> {t('roles.usersInRole')}
               </p>
               <div className="space-y-1.5 max-h-36 overflow-y-auto">
                 {kulRol.map(k => (
@@ -414,13 +432,13 @@ function RolDetayModal({ rol, kullanicilar, tumRoller, onClose, onSave, onDelete
               <button onClick={handleReset}
                 className="flex items-center justify-center gap-1.5 py-3 rounded-2xl text-sm font-semibold"
                 style={{ background: '#F3F4F6', color: '#6B7280' }}>
-                <RotateCcw className="w-3.5 h-3.5" /> Sıfırla
+                <RotateCcw className="w-3.5 h-3.5" /> {t('action.reset')}
               </button>
             ) : (
               <button onClick={onClose}
                 className="py-3 rounded-2xl font-bold text-sm"
                 style={{ background: '#F3F4F6', color: '#6B7280' }}>
-                Kapat
+                {t('action.close')}
               </button>
             )}
             <button onClick={handleSave} disabled={kayit || !degisti}
@@ -430,7 +448,7 @@ function RolDetayModal({ rol, kullanicilar, tumRoller, onClose, onSave, onDelete
                 ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 : <Save className="w-4 h-4" />
               }
-              {degisti ? 'Kaydet' : 'Kaydedildi'}
+              {degisti ? t('action.save') : t('toast.saved')}
             </button>
           </div>
         )}
@@ -439,7 +457,7 @@ function RolDetayModal({ rol, kullanicilar, tumRoller, onClose, onSave, onDelete
             <button onClick={onClose}
               className="w-full py-3 rounded-2xl font-bold text-sm"
               style={{ background: '#F3F4F6', color: '#6B7280' }}>
-              Kapat
+              {t('action.close')}
             </button>
           </div>
         )}
@@ -460,26 +478,27 @@ function RolDetayModal({ rol, kullanicilar, tumRoller, onClose, onSave, onDelete
 
 /* ── Yeni Rol Modalı ── */
 function YeniRolModal({ onClose, onCreated }) {
+  const { t } = useLanguage();
   const [ad,       setAd]       = useState('');
   const [yetkiler, setYetkiler] = useState(JSON.parse(JSON.stringify(FABRIKA_YETKILER)));
   const [kayit,    setKayit]    = useState(false);
 
   const handleSubmit = async () => {
-    if (!ad.trim()) { toast.error('Rol adı zorunludur.'); return; }
+    if (!ad.trim()) { toast.error(t('toast.roleNameRequired')); return; }
     setKayit(true);
     try {
       const { data } = await api.post('/roller', { ad: ad.trim(), yetkiler });
       toast.success(`"${data.ad}" rolü oluşturuldu.`);
       onCreated(data);
     } catch (err) {
-      toast.error(err.response?.data?.hata || 'Oluşturulamadı.');
+      toast.error(err.response?.data?.hata || t('toast.createFailed'));
     } finally { setKayit(false); }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center"
       style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
+      >
       <div className="bg-white w-full sm:max-w-lg sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="h-1.5 w-full flex-shrink-0" style={{ background: 'linear-gradient(90deg,#10B981,#059669)' }} />
         <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-4 sm:hidden flex-shrink-0" />
@@ -489,7 +508,7 @@ function YeniRolModal({ onClose, onCreated }) {
             style={{ background: 'linear-gradient(135deg,#DCFCE7,#BBF7D0)' }}>
             <Plus className="w-5 h-5 text-emerald-600" />
           </div>
-          <h3 className="text-base font-black text-gray-900 flex-1">Yeni Rol Oluştur</h3>
+          <h3 className="text-base font-black text-gray-900 flex-1">{t('roles.createTitle')}</h3>
           <button onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-100 text-gray-500 flex-shrink-0">
             <X className="w-4 h-4" />
@@ -498,18 +517,18 @@ function YeniRolModal({ onClose, onCreated }) {
 
         <div className="overflow-y-auto flex-1 px-6 pb-2 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Rol Adı *</label>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{t('roles.name')} *</label>
             <input
               type="text"
               value={ad}
               onChange={e => setAd(e.target.value)}
-              placeholder="Örn: Depo Sorumlusu, Muhasebeci..."
+              placeholder={t('roles.namePlaceholder')}
               className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-indigo-400 bg-gray-50"
               autoFocus
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Yetkiler</label>
+            <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">{t('roles.permissions')}</label>
             <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
               <YetkiMatrisi yetkiler={yetkiler} onChange={setYetkiler} />
             </div>
@@ -520,7 +539,7 @@ function YeniRolModal({ onClose, onCreated }) {
           <button onClick={onClose}
             className="py-3 rounded-2xl font-bold text-sm"
             style={{ background: '#F3F4F6', color: '#6B7280' }}>
-            İptal
+            {t('action.cancel')}
           </button>
           <button onClick={handleSubmit} disabled={kayit || !ad.trim()}
             className="py-3 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 disabled:opacity-60"
@@ -529,7 +548,7 @@ function YeniRolModal({ onClose, onCreated }) {
               ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               : <Plus className="w-4 h-4" />
             }
-            Oluştur
+            {t('action.create')}
           </button>
         </div>
       </div>
@@ -539,6 +558,7 @@ function YeniRolModal({ onClose, onCreated }) {
 
 /* ── Kompakt Rol Satırı ── */
 function RolSatiri({ rol, onClick }) {
+  const { t } = useLanguage();
   const { aktif, toplam } = yetkiSayisi(rol._admin ? ADMIN_YETKILER : (rol.yetkiler || {}));
 
   const isAdminRol = rol._admin === true;
@@ -576,7 +596,7 @@ function RolSatiri({ rol, onClick }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-bold text-gray-900 truncate">{rol.ad}</p>
         <p className="text-xs text-gray-400 mt-0.5">
-          {isAdminRol ? 'Sistem rolü • Değiştirilemez' : rol.sistem ? 'Sistem rolü' : 'Özel rol'}
+          {isAdminRol ? t('roles.systemRoleNoChange') : rol.sistem ? t('roles.systemRole') : t('roles.customRole')}
         </p>
       </div>
 
@@ -599,6 +619,7 @@ function RolSatiri({ rol, onClick }) {
 
 /* ── Ana Sayfa ── */
 export default function RollerPage() {
+  const { t } = useLanguage();
   const [roller,       setRoller]       = useState([]);
   const [kullanicilar, setKullanicilar] = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -614,7 +635,7 @@ export default function RollerPage() {
       ]);
       setRoller(r || []);
       setKullanicilar(k || []);
-    } catch { toast.error('Veriler yüklenemedi.'); }
+    } catch { toast.error(t('toast.loadFailed')); }
     finally { setLoading(false); }
   };
 
@@ -641,13 +662,13 @@ export default function RollerPage() {
       <div className="bg-white border-b border-gray-200 px-6 lg:px-8 py-5">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-black text-gray-900">Rol Yönetimi</h1>
+            <h1 className="text-xl font-black text-gray-900">{t('roles.title')}</h1>
             <div className="flex items-center gap-6 mt-3">
               {[
-                { icon: ShieldCheck, label: 'Toplam Rol',  value: loading ? '…' : roller.length + 1, color: 'linear-gradient(135deg,#6366F1,#8B5CF6)' },
-                { icon: Crown,       label: 'Admin',       value: loading ? '…' : adminler.length,   color: 'linear-gradient(135deg,#F59E0B,#D97706)' },
-                { icon: User,        label: 'Kullanıcı',   value: loading ? '…' : kullaniciLi.length, color: 'linear-gradient(135deg,#10B981,#059669)' },
-                { icon: ShieldCheck, label: 'Özel Rol',    value: loading ? '…' : ozelRoller.length, color: 'linear-gradient(135deg,#EC4899,#DB2777)' },
+                { icon: ShieldCheck, label: t('roles.totalRoles'),  value: loading ? '…' : roller.length + 1, color: 'linear-gradient(135deg,#6366F1,#8B5CF6)' },
+                { icon: Crown,       label: t('sidebar.roleAdmin'),  value: loading ? '…' : adminler.length,   color: 'linear-gradient(135deg,#F59E0B,#D97706)' },
+                { icon: User,        label: t('sidebar.roleUser'),   value: loading ? '…' : kullaniciLi.length, color: 'linear-gradient(135deg,#10B981,#059669)' },
+                { icon: ShieldCheck, label: t('roles.customRole'),    value: loading ? '…' : ozelRoller.length, color: 'linear-gradient(135deg,#EC4899,#DB2777)' },
               ].map((s, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: s.color }}>
@@ -664,7 +685,7 @@ export default function RollerPage() {
           <button onClick={() => setYeniModal(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white shadow-sm flex-shrink-0"
             style={{ background: 'linear-gradient(135deg,#10B981,#059669)' }}>
-            <Plus className="w-4 h-4" /> Yeni Rol
+            <Plus className="w-4 h-4" /> {t('roles.new')}
           </button>
         </div>
       </div>
@@ -694,7 +715,7 @@ export default function RollerPage() {
                 style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
                 <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#D97706' }} />
                 <p className="text-xs text-amber-800 leading-relaxed">
-                  <strong>Özel roller yetki şablonu olarak kullanılır.</strong> Kullanıcı düzenleme ekranında bir işletmeye atama yaparken bu şablonlardan birini seçerek yetkileri otomatik doldurabilirsiniz.
+                  {t('roles.templateInfo')}
                 </p>
               </div>
             )}

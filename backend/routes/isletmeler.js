@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { pool } = require('../lib/db');
 const authGuard = require('../middleware/authGuard');
 const adminGuard = require('../middleware/adminGuard');
+const { msg, messages } = require('../lib/messages');
 
 // Tüm route'lar auth + admin gerektirir
 router.use(authGuard, adminGuard);
@@ -54,7 +55,7 @@ router.get('/', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error('[isletmeler]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -67,13 +68,13 @@ router.get('/:id', async (req, res) => {
     );
 
     if (!rows.length) {
-      return res.status(404).json({ hata: 'İşletme bulunamadı.' });
+      return res.status(404).json({ hata: msg(req.lang, 'BUSINESS_NOT_FOUND') });
     }
 
     res.json(rows[0]);
   } catch (err) {
     console.error('[isletmeler]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -82,13 +83,13 @@ router.post('/', async (req, res) => {
   const { ad, kod, adres, telefon } = req.body;
 
   if (!ad || !kod) {
-    return res.status(400).json({ hata: 'Ad ve kod zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_NAME_AND_CODE_REQUIRED') });
   }
-  if (ad.length > 255) return res.status(400).json({ hata: 'Ad en fazla 255 karakter olabilir.' });
-  if (kod.length > 50) return res.status(400).json({ hata: 'Kod en fazla 50 karakter olabilir.' });
-  if (adres && adres.length > 500) return res.status(400).json({ hata: 'Adres en fazla 500 karakter olabilir.' });
+  if (ad.length > 255) return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_NAME_MAX_LENGTH') });
+  if (kod.length > 50) return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_CODE_MAX_LENGTH') });
+  if (adres && adres.length > 500) return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_ADDRESS_MAX_LENGTH') });
   if (telefon && !/^[0-9+\-\s()]{7,20}$/.test(telefon)) {
-    return res.status(400).json({ hata: 'Geçerli bir telefon numarası giriniz.' });
+    return res.status(400).json({ hata: msg(req.lang, 'INVALID_PHONE') });
   }
 
   try {
@@ -107,10 +108,10 @@ router.post('/', async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     if (err.errno === 1062) {
-      return res.status(409).json({ hata: 'Bu kod zaten kullanımda.' });
+      return res.status(409).json({ hata: msg(req.lang, 'BUSINESS_CODE_IN_USE') });
     }
     console.error('[isletmeler]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -119,7 +120,7 @@ router.put('/:id', async (req, res) => {
   const { ad, kod, adres, telefon, aktif } = req.body;
 
   if (telefon && !/^[0-9+\-\s()]{7,20}$/.test(telefon)) {
-    return res.status(400).json({ hata: 'Geçerli bir telefon numarası giriniz.' });
+    return res.status(400).json({ hata: msg(req.lang, 'INVALID_PHONE') });
   }
 
   try {
@@ -133,7 +134,7 @@ router.put('/:id', async (req, res) => {
     if (aktif !== undefined)   { fields.push('aktif = ?');   params.push(aktif ? 1 : 0); }
 
     if (!fields.length) {
-      return res.status(400).json({ hata: 'Güncellenecek alan yok.' });
+      return res.status(400).json({ hata: msg(req.lang, 'NO_FIELDS_TO_UPDATE') });
     }
 
     params.push(req.params.id);
@@ -149,13 +150,13 @@ router.put('/:id', async (req, res) => {
     );
 
     if (!rows.length) {
-      return res.status(404).json({ hata: 'İşletme bulunamadı.' });
+      return res.status(404).json({ hata: msg(req.lang, 'BUSINESS_NOT_FOUND') });
     }
 
     res.json(rows[0]);
   } catch (err) {
     console.error('[isletmeler]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -167,10 +168,10 @@ router.delete('/:id', async (req, res) => {
       [req.params.id]
     );
 
-    res.json({ mesaj: 'İşletme pasife alındı.' });
+    res.json({ mesaj: msg(req.lang, 'BUSINESS_DEACTIVATED') });
   } catch (err) {
     console.error('[isletmeler]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -178,13 +179,13 @@ router.delete('/:id', async (req, res) => {
 router.put('/:id/restore', async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT id, aktif FROM isletmeler WHERE id = ?', [req.params.id]);
-    if (!rows.length) return res.status(404).json({ hata: 'İşletme bulunamadı.' });
-    if (rows[0].aktif === 1) return res.status(400).json({ hata: 'Bu işletme zaten aktif.' });
+    if (!rows.length) return res.status(404).json({ hata: msg(req.lang, 'BUSINESS_NOT_FOUND') });
+    if (rows[0].aktif === 1) return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_ALREADY_ACTIVE') });
     await pool.execute('UPDATE isletmeler SET aktif = 1 WHERE id = ?', [req.params.id]);
-    res.json({ mesaj: 'İşletme geri alındı.' });
+    res.json({ mesaj: msg(req.lang, 'BUSINESS_RESTORED') });
   } catch (err) {
     console.error('[isletmeler]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 

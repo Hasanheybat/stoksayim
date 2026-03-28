@@ -1,0 +1,15 @@
+{
+  "backend": "http://localhost:3001",
+  "summary": {
+    "passed": 47,
+    "failed": 1,
+    "total": 48,
+    "ms": 651
+  },
+  "errors": [
+    {
+      "name": "INPUT-03 Negatif miktar",
+      "error": "Status 500"
+    }
+  ]
+}

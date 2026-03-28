@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { pool } = require('../lib/db');
 const authGuard  = require('../middleware/authGuard');
 const adminGuard = require('../middleware/adminGuard');
+const { msg, messages } = require('../lib/messages');
 
 router.use(authGuard, adminGuard);
 
@@ -35,7 +36,7 @@ router.get('/', async (req, res) => {
     });
   } catch (err) {
     console.error('[stats]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -52,7 +53,7 @@ router.get('/sayim-trend', async (req, res) => {
     res.json(data || []);
   } catch (err) {
     console.error('[stats]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -76,7 +77,7 @@ router.get('/isletme-sayimlar', async (req, res) => {
     res.json(rows || []);
   } catch (err) {
     console.error('[stats]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -104,7 +105,7 @@ router.get('/son-sayimlar', async (req, res) => {
     res.json(enriched);
   } catch (err) {
     console.error('[stats]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 

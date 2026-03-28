@@ -6,6 +6,7 @@ import {
   Info, Pencil, Trash2, Package, FileText, FileSpreadsheet, RotateCcw,
 } from 'lucide-react';
 import api from '../../lib/apiAdm';
+import { useLanguage } from '../../i18n';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -51,6 +52,7 @@ function PageHeader({ title, stats }) {
 
 /* ── Çoklu İşletme Seçici ── */
 function IsletmeFiltre({ isletmeler, secili, onChange }) {
+  const { t } = useLanguage();
   const [acik, setAcik] = useState(false);
   const ref = useRef(null);
 
@@ -64,9 +66,9 @@ function IsletmeFiltre({ isletmeler, secili, onChange }) {
   const temizle = e => { e.stopPropagation(); onChange([]); };
 
   const label = secili.length === 0
-    ? 'Tüm İşletmeler'
+    ? t('filter.allBusinesses')
     : secili.length === 1
-      ? isletmeler.find(i => i.id === secili[0])?.ad || '1 İşletme'
+      ? isletmeler.find(i => i.id === secili[0])?.ad || t('stat.business')
       : `${secili.length} İşletme Seçili`;
 
   return (
@@ -93,7 +95,7 @@ function IsletmeFiltre({ isletmeler, secili, onChange }) {
             <div className={`w-[18px] h-[18px] rounded flex items-center justify-center border-2 flex-shrink-0 transition-colors ${secili.length === isletmeler.length ? 'border-indigo-500 bg-indigo-500' : 'border-gray-300'}`}>
               {secili.length === isletmeler.length && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
             </div>
-            Tümünü Seç
+            {t('action.selectAll')}
           </button>
           {isletmeler.map(i => {
             const aktif = secili.includes(i.id);
@@ -132,7 +134,7 @@ function formatTarih(tarih) {
 }
 
 /* ── Export helpers ── */
-function exportPDF(sayim, kalemler) {
+function exportPDF(sayim, kalemler, t) {
   const doc = new jsPDF();
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
@@ -142,9 +144,9 @@ function exportPDF(sayim, kalemler) {
   doc.setTextColor(100);
   let y = 28;
   const bilgiler = [
-    ['Isletme',   sayim.isletmeler?.ad],
-    ['Tarih',     sayim.tarih ? new Date(sayim.tarih).toLocaleDateString('tr-TR') : null],
-    ['Kullanici', sayim.kullanicilar?.ad_soyad],
+    [t('table.business'),   sayim.isletmeler?.ad],
+    [t('table.date'),     sayim.tarih ? new Date(sayim.tarih).toLocaleDateString('tr-TR') : null],
+    [t('table.user'), sayim.kullanicilar?.ad_soyad],
   ].filter(([, v]) => v);
   bilgiler.forEach(([k, v]) => {
     doc.setFont('helvetica', 'bold'); doc.text(`${k}:`, 14, y);
@@ -153,7 +155,7 @@ function exportPDF(sayim, kalemler) {
   });
   autoTable(doc, {
     startY: y + 4,
-    head: [['#', 'Urun Adi', 'Ikinci Isim', 'Urun Kodu', 'Miktar', 'Birim']],
+    head: [['#', t('table.productName'), t('table.secondName'), t('table.productCode'), t('table.quantity'), t('table.unit')]],
     body: kalemler.map((k, i) => [
       i + 1,
       k.isletme_urunler?.urun_adi || '—',
@@ -169,15 +171,15 @@ function exportPDF(sayim, kalemler) {
   doc.save(`${(sayim.ad || 'toplanmis-sayim').replace(/\s+/g, '_')}.pdf`);
 }
 
-function exportExcel(sayim, kalemler) {
+function exportExcel(sayim, kalemler, t) {
   const wb = XLSX.utils.book_new();
   const rows = [
-    ['Sayım Adı',  sayim.ad || ''],
-    ['İşletme',    sayim.isletmeler?.ad || ''],
-    ['Tarih',      sayim.tarih ? new Date(sayim.tarih).toLocaleDateString('tr-TR') : ''],
-    ['Kullanıcı',  sayim.kullanicilar?.ad_soyad || ''],
+    [t('mergedCounts.countName'),  sayim.ad || ''],
+    [t('table.business'),    sayim.isletmeler?.ad || ''],
+    [t('table.date'),      sayim.tarih ? new Date(sayim.tarih).toLocaleDateString('tr-TR') : ''],
+    [t('table.user'),  sayim.kullanicilar?.ad_soyad || ''],
     [],
-    ['#', 'Ürün Adı', 'İkinci İsim', 'Ürün Kodu', 'Miktar', 'Birim'],
+    ['#', t('table.productName'), t('table.secondName'), t('table.productCode'), t('table.quantity'), t('table.unit')],
     ...kalemler.map((k, i) => [
       i + 1,
       k.isletme_urunler?.urun_adi || '',
@@ -195,6 +197,7 @@ function exportExcel(sayim, kalemler) {
 
 /* ── Detay Modal — kalemler + PDF/Excel ── */
 function DetayModal({ sayimId, sayimObj, onClose }) {
+  const { t } = useLanguage();
   const [sayim, setSayim]       = useState(sayimObj || null);
   const [kalemler, setKalemler] = useState([]);
   const [yukleniyor, setYukleniyor] = useState(true);
@@ -208,7 +211,7 @@ function DetayModal({ sayimId, sayimObj, onClose }) {
     ]).then(([rs, rk]) => {
       if (!sayimObj) setSayim(rs.data);
       setKalemler(rk.data || []);
-    }).catch(() => toast.error('Detay yüklenemedi.'))
+    }).catch(() => toast.error(t('toast.loadFailed')))
       .finally(() => setYukleniyor(false));
   }, [sayimId]);
 
@@ -217,9 +220,9 @@ function DetayModal({ sayimId, sayimObj, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] flex flex-col justify-end sm:items-center sm:justify-center p-0 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
-      onClick={onClose}>
+      >
       <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
-        onClick={e => e.stopPropagation()}>
+        >
 
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
           <div className="w-10 h-1 rounded-full bg-gray-200" />
@@ -249,9 +252,9 @@ function DetayModal({ sayimId, sayimObj, onClose }) {
             {/* Bilgi satırları */}
             <div className="px-5 py-4 space-y-2.5 border-b border-gray-100">
               {[
-                { label: 'İşletme',   value: sayim.isletmeler?.ad },
-                { label: 'Tarih',     value: formatTarih(sayim.tarih) },
-                { label: 'Kullanıcı', value: sayim.kullanicilar?.ad_soyad },
+                { label: t('nav.businesses'),   value: sayim.isletmeler?.ad },
+                { label: t('table.date'),     value: formatTarih(sayim.tarih) },
+                { label: t('nav.users'), value: sayim.kullanicilar?.ad_soyad },
                 { label: 'Toplanan',  value: `${kaynaklar.length} sayım birleştirildi` },
               ].filter(r => r.value).map(r => (
                 <div key={r.label} className="flex items-center justify-between gap-4">
@@ -270,7 +273,7 @@ function DetayModal({ sayimId, sayimObj, onClose }) {
                 </span>
               </div>
               {kalemler.length === 0 ? (
-                <div className="text-center py-8 text-sm text-gray-400">Kalem bulunamadı</div>
+                <div className="text-center py-8 text-sm text-gray-400">{t('counts.noItems')}</div>
               ) : (
                 <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
                   {kalemler.map(k => {
@@ -286,7 +289,7 @@ function DetayModal({ sayimId, sayimObj, onClose }) {
                             <div className="flex items-center gap-1.5">
                               <p className={`text-sm font-medium truncate ${pasif ? 'text-red-500' : 'text-gray-900'}`}>{urun.urun_adi || '—'}</p>
                               {pasif && (
-                                <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded">Pasif</span>
+                                <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded">{t('status.inactive')}</span>
                               )}
                             </div>
                             {urun.isim_2 && <p className="text-xs text-indigo-500 truncate">{urun.isim_2}</p>}
@@ -301,17 +304,17 @@ function DetayModal({ sayimId, sayimObj, onClose }) {
                         {k._acik && (
                           <div className="mt-2 p-2.5 bg-gray-50 rounded-lg border border-gray-100 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                             {urun.urun_kodu && (
-                              <><span className="text-gray-400 font-medium">Ürün Kodu</span><span className="text-gray-700 font-semibold text-right">{urun.urun_kodu}</span></>
+                              <><span className="text-gray-400 font-medium">{t('products.code')}</span><span className="text-gray-700 font-semibold text-right">{urun.urun_kodu}</span></>
                             )}
                             {urun.isim_2 && (
-                              <><span className="text-gray-400 font-medium">İkinci İsim</span><span className="text-gray-700 font-semibold text-right">{urun.isim_2}</span></>
+                              <><span className="text-gray-400 font-medium">{t('products.altName')}</span><span className="text-gray-700 font-semibold text-right">{urun.isim_2}</span></>
                             )}
                             {urun.barkodlar && (
                               <><span className="text-gray-400 font-medium">Barkod</span><span className="text-gray-700 font-semibold text-right">{urun.barkodlar}</span></>
                             )}
-                            <span className="text-gray-400 font-medium">Birim</span><span className="text-gray-700 font-semibold text-right">{k.birim || 'ADET'}</span>
+                            <span className="text-gray-400 font-medium">{t('products.unit')}</span><span className="text-gray-700 font-semibold text-right">{k.birim || 'ADET'}</span>
                             {pasif && (
-                              <><span className="text-gray-400 font-medium">Durum</span><span className="text-red-600 font-semibold text-right">Pasif Ürün</span></>
+                              <><span className="text-gray-400 font-medium">{t('status.status')}</span><span className="text-red-600 font-semibold text-right">{t('products.inactiveProduct')}</span></>
                             )}
                           </div>
                         )}
@@ -324,12 +327,12 @@ function DetayModal({ sayimId, sayimObj, onClose }) {
 
             {/* İndirme butonları */}
             <div className="px-5 pt-4 pb-2 grid grid-cols-2 gap-2 border-t border-gray-100">
-              <button onClick={() => { try { exportPDF(sayim, kalemler); } catch { toast.error('PDF oluşturulamadı.'); } }}
+              <button onClick={() => { try { exportPDF(sayim, kalemler, t); } catch { toast.error(t('toast.pdfFailed')); } }}
                 className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                 style={{ borderColor: '#FECACA', color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA' }}>
                 <FileText className="w-4 h-4" /> PDF İndir
               </button>
-              <button onClick={() => { try { exportExcel(sayim, kalemler); } catch { toast.error('Excel oluşturulamadı.'); } }}
+              <button onClick={() => { try { exportExcel(sayim, kalemler, t); } catch { toast.error(t('toast.excelFailed')); } }}
                 className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                 style={{ borderColor: '#BBF7D0', color: '#15803D', background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
                 <FileSpreadsheet className="w-4 h-4" /> Excel İndir
@@ -353,13 +356,14 @@ function DetayModal({ sayimId, sayimObj, onClose }) {
 
 /* ── Info Modal ── */
 function InfoModal({ sayim, onClose }) {
+  const { t } = useLanguage();
   const kaynaklar = parseKaynaklar(sayim.notlar);
   return (
     <div className="fixed inset-0 z-[60] flex flex-col justify-end sm:items-center sm:justify-center p-0 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
-      onClick={onClose}>
+      >
       <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
-        onClick={e => e.stopPropagation()}>
+        >
 
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
           <div className="w-10 h-1 rounded-full bg-gray-200" />
@@ -371,16 +375,16 @@ function InfoModal({ sayim, onClose }) {
           </button>
           <div className="flex-1 min-w-0">
             <h3 className="font-bold text-gray-900 truncate">{sayim.ad}</h3>
-            <p className="text-xs text-gray-400">Toplanan sayımların detayları</p>
+            <p className="text-xs text-gray-400">{t('totalCounts.sourceDetails')}</p>
           </div>
         </div>
 
         <div className="px-5 py-4 space-y-2.5 border-b border-gray-100">
           {[
-            { label: 'Sayım ID', value: `#${sayim.id?.split('-')[0]?.toUpperCase()}` },
-            { label: 'İşletme', value: sayim.isletmeler?.ad },
-            { label: 'Tarih', value: formatTarih(sayim.tarih) },
-            { label: 'Kullanıcı', value: sayim.kullanicilar?.ad_soyad },
+            { label: t('table.id'), value: `#${sayim.id?.split('-')[0]?.toUpperCase()}` },
+            { label: t('nav.businesses'), value: sayim.isletmeler?.ad },
+            { label: t('table.date'), value: formatTarih(sayim.tarih) },
+            { label: t('nav.users'), value: sayim.kullanicilar?.ad_soyad },
           ].filter(r => r.value).map(r => (
             <div key={r.label} className="flex items-center justify-between gap-4">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{r.label}</span>
@@ -398,7 +402,7 @@ function InfoModal({ sayim, onClose }) {
 
         <div className="flex-1 overflow-y-auto max-h-64">
           {kaynaklar.length === 0 ? (
-            <div className="text-center py-8 text-sm text-gray-400">Kaynak bilgisi bulunamadı</div>
+            <div className="text-center py-8 text-sm text-gray-400">{t('totalCounts.noSourceInfo')}</div>
           ) : (
             <div className="divide-y divide-gray-50 px-5">
               {kaynaklar.map((k, i) => (
@@ -435,6 +439,7 @@ function InfoModal({ sayim, onClose }) {
 
 /* ── Düzenle Modal ── */
 function DuzenleModal({ sayim, onClose, onSave, onDelete }) {
+  const { t } = useLanguage();
   const [isim, setIsim] = useState(sayim.ad);
   const [yukleniyor, setYukleniyor] = useState(false);
 
@@ -443,10 +448,10 @@ function DuzenleModal({ sayim, onClose, onSave, onDelete }) {
     setYukleniyor(true);
     try {
       await api.put(`/sayimlar/${sayim.id}`, { ad: isim.trim() });
-      toast.success('İsim güncellendi');
+      toast.success(t('toast.nameUpdated'));
       onSave();
     } catch {
-      toast.error('Güncelleme başarısız');
+      toast.error(t('toast.updateFailed'));
     }
     setYukleniyor(false);
   };
@@ -454,9 +459,9 @@ function DuzenleModal({ sayim, onClose, onSave, onDelete }) {
   return (
     <div className="fixed inset-0 z-[60] flex flex-col justify-end sm:items-center sm:justify-center p-0 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
-      onClick={onClose}>
+      >
       <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden"
-        onClick={e => e.stopPropagation()}>
+        >
 
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
           <div className="w-10 h-1 rounded-full bg-gray-200" />
@@ -467,13 +472,13 @@ function DuzenleModal({ sayim, onClose, onSave, onDelete }) {
             <ChevronLeft className="w-5 h-5 text-gray-500" />
           </button>
           <div>
-            <h3 className="font-bold text-gray-900">Sayımı Düzenle</h3>
+            <h3 className="font-bold text-gray-900">{t('totalCounts.editCount')}</h3>
             <p className="text-xs text-gray-400">{sayim.ad}</p>
           </div>
         </div>
 
         <div className="px-5 py-5">
-          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">Sayım İsmi</label>
+          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">{t('totalCounts.countName')}</label>
           <input
             type="text"
             value={isim}
@@ -509,16 +514,17 @@ function DuzenleModal({ sayim, onClose, onSave, onDelete }) {
 
 /* ── Silme Onay Modalı ── */
 function SilOnayModal({ sayim, onClose, onConfirm }) {
+  const { t } = useLanguage();
   const [yukleniyor, setYukleniyor] = useState(false);
 
   const sil = async () => {
     setYukleniyor(true);
     try {
       await api.delete(`/sayimlar/${sayim.id}`);
-      toast.success('Sayım silindi');
+      toast.success(t('toast.countDeleted'));
       onConfirm();
     } catch {
-      toast.error('Silme başarısız');
+      toast.error(t('toast.deleteFailed'));
     }
     setYukleniyor(false);
   };
@@ -526,15 +532,15 @@ function SilOnayModal({ sayim, onClose, onConfirm }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
-      onClick={onClose}>
+      >
       <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-6"
-        onClick={e => e.stopPropagation()}>
+        >
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#FEF2F2' }}>
             <Trash2 className="w-5 h-5 text-red-500" />
           </div>
           <div>
-            <p className="font-bold text-gray-900 text-sm">Toplanmış Sayımı Sil</p>
+            <p className="font-bold text-gray-900 text-sm">{t('totalCounts.deleteTitle')}</p>
             <p className="text-xs text-gray-400">Bu işlem geri alınamaz</p>
           </div>
         </div>
@@ -563,6 +569,7 @@ const LIMIT = 50;
 
 /* ── Ana Sayfa ── */
 export default function ToplanmisSayimlarAdminPage() {
+  const { t } = useLanguage();
   const [isletmeler, setIsletmeler]             = useState([]);
   const [sayimlar, setSayimlar]                 = useState([]);
   const [seciliIsletmeler, setSeciliIsletmeler] = useState([]);
@@ -607,7 +614,7 @@ export default function ToplanmisSayimlarAdminPage() {
       setSayimlar(liste);
       setToplam(res.toplam || 0);
     } catch {
-      toast.error('Sayımlar yüklenemedi.');
+      toast.error(t('toast.loadFailed'));
     } finally {
       setYukleniyor(false);
     }
@@ -622,11 +629,11 @@ export default function ToplanmisSayimlarAdminPage() {
     if (!geriAlSayim) return;
     try {
       await api.put(`/sayimlar/${geriAlSayim.id}/restore`);
-      toast.success('Sayım geri alındı.');
+      toast.success(t('totalCounts.countReverted'));
       setGeriAlSayim(null);
       getSayimlar();
     } catch (err) {
-      toast.error(err.response?.data?.hata || 'Geri alma başarısız.');
+      toast.error(err.response?.data?.hata || t('totalCounts.revertFailed'));
     }
   };
 
@@ -664,7 +671,7 @@ export default function ToplanmisSayimlarAdminPage() {
 
           {/* Aktif / Pasif toggle */}
           <div className="flex bg-white rounded-xl border border-gray-200 p-1">
-            {[{ k: 'tumu', l: 'Tümü' }, { k: 'aktif', l: 'Aktif' }, { k: 'pasif', l: 'Pasif' }].map(f => (
+            {[{ k: 'tumu', l: t('status.all') }, { k: 'aktif', l: t('status.active') }, { k: 'pasif', l: t('status.inactive') }].map(f => (
               <button key={f.k} onClick={() => handleDurumFiltreChange(f.k)}
                 className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
                 style={durumFiltre === f.k ? { background: '#6366F1', color: 'white' } : { color: '#94A3B8' }}>
@@ -685,7 +692,7 @@ export default function ToplanmisSayimlarAdminPage() {
           <div className="bg-white rounded-2xl p-16 text-center border border-gray-100">
             <Calculator className="w-12 h-12 mx-auto mb-3 text-gray-200" />
             <p className="text-gray-400 font-medium">
-              {arama ? `"${arama}" için toplanmış sayım bulunamadı.` : 'Henüz toplanmış sayım yok.'}
+              {arama ? `"${arama}" ${t('totalCounts.noSearchResult')}` : t('totalCounts.noMergedCounts')}
             </p>
           </div>
         ) : (
@@ -711,7 +718,7 @@ export default function ToplanmisSayimlarAdminPage() {
                       <span className="flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
                         style={{ background: '#FEF2F2', color: '#DC2626' }}>
                         <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#EF4444' }} />
-                        Pasif
+                        {t('status.inactive')}
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
@@ -758,7 +765,7 @@ export default function ToplanmisSayimlarAdminPage() {
                           <button
                             onClick={(e) => { e.stopPropagation(); setInfoSayim(s); }}
                             className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-indigo-50 transition-colors"
-                            title="Kaynak Sayımlar">
+                            title={t('totalCounts.sourceCounts')}>
                             <Info className="w-3.5 h-3.5 text-indigo-500" />
                           </button>
                           <button
@@ -826,13 +833,13 @@ export default function ToplanmisSayimlarAdminPage() {
           style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
           onClick={() => setGeriAlSayim(null)}>
           <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-6"
-            onClick={e => e.stopPropagation()}>
+            >
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#DCFCE7' }}>
                 <RotateCcw className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <p className="font-bold text-gray-900 text-sm">Sayımı Geri Al</p>
+                <p className="font-bold text-gray-900 text-sm">{t('totalCounts.revertCount')}</p>
                 <p className="text-xs text-gray-400">Bu sayım tekrar aktif olacak</p>
               </div>
             </div>

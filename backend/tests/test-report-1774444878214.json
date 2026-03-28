@@ -1,0 +1,39 @@
+{
+  "backend": "http://localhost:8888",
+  "timestamp": "2026-03-25T13:21:18.214Z",
+  "summary": {
+    "passed": 89,
+    "failed": 7,
+    "total": 96
+  },
+  "errors": [
+    {
+      "name": "Ürün — Barkod ile ara",
+      "error": "Beklenen 200, gelen 404"
+    },
+    {
+      "name": "Auth — Şifre güncelle (yanlış eski şifre) → 401",
+      "error": "Beklenen 401, gelen 429"
+    },
+    {
+      "name": "Auth — Şifre güncelle (kısa yeni şifre) → 400",
+      "error": "Beklenen 400, gelen 429"
+    },
+    {
+      "name": "Auth — Şifre güncelle başarılı",
+      "error": "Beklenen 200, gelen 429"
+    },
+    {
+      "name": "Auth — Yeni şifre ile login",
+      "error": "Beklenen 200, gelen 429"
+    },
+    {
+      "name": "Cleanup — Ürün aktif sayımda sil → 409",
+      "error": "Beklenen 409 (aktif sayımda), gelen 200"
+    },
+    {
+      "name": "Cleanup — Kullanıcı pasife al → login edilemez",
+      "error": "Pasif kullanıcı login — beklenen 403, gelen 429"
+    }
+  ]
+}

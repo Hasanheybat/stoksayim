@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { Users, ShieldCheck, UserCheck, Plus, Pencil, Power, Search, Building2, ChevronDown, Check, X, AlertTriangle, Save, Shield, ChevronLeft, ChevronRight, RotateCcw, Eye, Mail, Phone } from 'lucide-react';
 import api from '../../lib/apiAdm';
+import { useLanguage } from '../../i18n';
 
 /* ── Yetki sabitleri ── */
 const FABRIKA_YETKILER = {
@@ -24,22 +25,29 @@ function getDefaultYetkiler() {
 // Backward-compat alias
 const DEFAULT_YETKILER = FABRIKA_YETKILER;
 
-const KATEGORILER = [
-  { key: 'urun',   label: 'Ürünler', islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
-  { key: 'depo',   label: 'Depolar', islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
-  { key: 'sayim',        label: 'Sayım',          islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
-  { key: 'toplam_sayim', label: 'Toplam Sayımlar', islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
-];
+function getKategoriler(t) {
+  return [
+    { key: 'urun',   label: t('perm.products'), islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+    { key: 'depo',   label: t('perm.warehouses'), islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+    { key: 'sayim',        label: t('perm.counts'),          islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+    { key: 'toplam_sayim', label: t('perm.mergedCounts'), islemler: ['goruntule', 'ekle', 'duzenle', 'sil'] },
+  ];
+}
 
-const ISLEM_LABELS = {
-  goruntule: 'Görüntüle',
-  ekle:      'Ekle',
-  duzenle:   'Düzenle',
-  sil:       'Sil',
-};
+function getIslemLabels(t) {
+  return {
+    goruntule: t('perm.view'),
+    ekle:      t('perm.add'),
+    duzenle:   t('perm.edit'),
+    sil:       t('perm.delete'),
+  };
+}
 
 /* ── Yetki Editörü Bileşeni ── */
 function YetkiEditor({ isletme, yetkiler, onChange }) {
+  const { t } = useLanguage();
+  const KATEGORILER = getKategoriler(t);
+  const ISLEM_LABELS = getIslemLabels(t);
   const [acik, setAcik] = useState(false);
 
   const toggleYetki = (kat, islem) => {
@@ -144,6 +152,7 @@ function PageHeader({ title, stats }) {
 
 /* ── Çoklu İşletme Filtresi ── */
 function IsletmeFiltre({ isletmeler, secili, onChange }) {
+  const { t } = useLanguage();
   const [acik, setAcik] = useState(false);
   const ref = useRef(null);
 
@@ -157,10 +166,10 @@ function IsletmeFiltre({ isletmeler, secili, onChange }) {
   const temizle = e  => { e.stopPropagation(); onChange([]); };
 
   const label = secili.length === 0
-    ? 'Tüm İşletmeler'
+    ? t('filter.allBusinesses')
     : secili.length === 1
-      ? isletmeler.find(i => i.id === secili[0])?.ad || '1 İşletme'
-      : `${secili.length} İşletme Seçili`;
+      ? isletmeler.find(i => i.id === secili[0])?.ad || `1 ${t('stat.business')}`
+      : `${secili.length} ${t('stat.business')}`;
 
   return (
     <div ref={ref} className="relative">
@@ -192,7 +201,7 @@ function IsletmeFiltre({ isletmeler, secili, onChange }) {
             }`}>
               {secili.length === isletmeler.length && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
             </div>
-            Tümünü Seç
+            {t('users.selectAll')}
           </button>
           {isletmeler.map(i => {
             const aktif = secili.includes(i.id);
@@ -217,6 +226,7 @@ function IsletmeFiltre({ isletmeler, secili, onChange }) {
 
 /* ── İşletme Listesi (kart içi, popover) ── */
 function IsletmeListesi({ isletmeler, acik, onToggle }) {
+  const { t } = useLanguage();
   const ref = useRef(null);
 
   useEffect(() => {
@@ -227,7 +237,7 @@ function IsletmeListesi({ isletmeler, acik, onToggle }) {
   }, [acik]);
 
   if (!isletmeler || isletmeler.length === 0) {
-    return <p className="text-xs text-gray-400 italic">İşletme atanmamış</p>;
+    return <p className="text-xs text-gray-400 italic">{t('users.noBusinessAssigned')}</p>;
   }
 
   if (isletmeler.length === 1) {
@@ -257,14 +267,14 @@ function IsletmeListesi({ isletmeler, acik, onToggle }) {
         style={acik
           ? { background: '#6366F1', color: 'white' }
           : { background: '#E0E7FF', color: '#6366F1' }}
-        title="İşletmeleri göster"
+        title={t('users.showBusinesses')}
       >
         i
       </button>
 
       {acik && (
         <div className="absolute bottom-full left-0 mb-2 z-30 bg-white rounded-xl shadow-xl border border-gray-100 py-2 min-w-[180px]">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide px-3 pb-1.5">İşletmeler</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide px-3 pb-1.5">{t('nav.businesses')}</p>
           {isletmeler.map(ist => (
             <div key={ist.id} className="flex items-center gap-2 px-3 py-1.5">
               <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#6366F1' }} />
@@ -285,11 +295,12 @@ function IsletmeListesi({ isletmeler, acik, onToggle }) {
 const LIMIT = 50;
 
 export default function KullanicilarPage() {
+  const { t } = useLanguage();
   const [kullanicilar,   setKullanicilar]   = useState([]);
   const [isletmeler,     setIsletmeler]     = useState([]);   // filtre için tüm işletmeler
   const [loading,        setLoading]        = useState(true);
   const [modalOpen,      setModalOpen]      = useState(false);
-  const [filtre,         setFiltre]         = useState('Tümü');
+  const [filtre,         setFiltre]         = useState('all');
   const [aktifFiltre,    setAktifFiltre]    = useState('tumu'); // 'tumu' | 'aktif' | 'pasif'
   const [geriAlKullanici, setGeriAlKullanici] = useState(null);
   const [search,         setSearch]         = useState('');
@@ -330,15 +341,15 @@ export default function KullanicilarPage() {
     try {
       const p = new URLSearchParams({ sayfa, limit: LIMIT });
       if (aramaDebounce) p.set('q', aramaDebounce);
-      if (filtre === 'Admin')    p.set('rol', 'admin');
-      if (filtre === 'Kullanıcı') p.set('rol', 'kullanici');
+      if (filtre === 'admin')    p.set('rol', 'admin');
+      if (filtre === 'user') p.set('rol', 'kullanici');
       if (aktifFiltre === 'aktif') p.set('filtre', 'Aktif');
       else if (aktifFiltre === 'pasif') p.set('filtre', 'Pasif');
       const { data } = await api.get(`/kullanicilar?${p}`);
       setKullanicilar(data.data || []);
       setToplam(data.toplam || 0);
     } catch {
-      toast.error('Veriler yüklenemedi.');
+      toast.error(t('toast.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -352,28 +363,28 @@ export default function KullanicilarPage() {
     if (!geriAlKullanici) return;
     try {
       await api.put(`/kullanicilar/${geriAlKullanici.id}/restore`);
-      toast.success('Kullanıcı geri alındı.');
+      toast.success(t('toast.userRestored'));
       setGeriAlKullanici(null);
       load();
     } catch (err) {
-      toast.error(err.response?.data?.hata || 'Geri alma başarısız.');
+      toast.error(err.response?.data?.hata || t('toast.restoreFailed'));
     }
   };
 
   const handleSave = async e => {
     e.preventDefault();
     if (!form.sifre || form.sifre.length < 8) {
-      toast.error('Şifre en az 8 karakter olmalıdır.');
+      toast.error(t('toast.passwordMinLength'));
       return;
     }
     setSaving(true);
     try {
       await api.post('/kullanicilar', form);
-      toast.success('Kullanıcı oluşturuldu.');
+      toast.success(t('toast.userCreated'));
       setModalOpen(false);
       setForm({ ad_soyad: '', email: '', sifre: '', rol: 'kullanici', telefon: '' });
       load();
-    } catch (err) { toast.error(err.response?.data?.hata || 'Hata.'); }
+    } catch (err) { toast.error(err.response?.data?.hata || t('toast.error')); }
     finally { setSaving(false); }
   };
 
@@ -382,10 +393,10 @@ export default function KullanicilarPage() {
     setAktifIsleniyor(true);
     try {
       await api.put(`/kullanicilar/${aktifOnay.id}`, { aktif: true });
-      toast.success('Kullanıcı aktife alındı.');
+      toast.success(t('toast.userActivated'));
       setAktifOnay(null);
       load();
-    } catch { toast.error('İşlem başarısız.'); }
+    } catch { toast.error(t('toast.operationFailed')); }
     finally { setAktifIsleniyor(false); }
   };
 
@@ -423,7 +434,7 @@ export default function KullanicilarPage() {
 
   const handleDuzenleKaydet = async () => {
     if (duzenleForm.yeni_sifre.trim() && duzenleForm.yeni_sifre.trim().length < 8) {
-      toast.error('Şifre en az 8 karakter olmalıdır.');
+      toast.error(t('toast.passwordMinLength'));
       return;
     }
     setDuzenleKayit(true);
@@ -474,10 +485,10 @@ export default function KullanicilarPage() {
         );
       }
 
-      toast.success('Kullanıcı güncellendi.');
+      toast.success(t('toast.userUpdated'));
       setDuzenleKul(null);
       load();
-    } catch { toast.error('Güncelleme başarısız.'); }
+    } catch { toast.error(t('toast.updateFailed')); }
     finally { setDuzenleKayit(false); }
   };
 
@@ -486,10 +497,10 @@ export default function KullanicilarPage() {
     setPasifIsleniyor(true);
     try {
       await api.delete(`/kullanicilar/${pasifOnay.id}`);
-      toast.success('Kullanıcı pasife alındı.');
+      toast.success(t('toast.userDeactivated'));
       setPasifOnay(null);
       load();
-    } catch { toast.error('İşlem başarısız.'); }
+    } catch { toast.error(t('toast.operationFailed')); }
     finally { setPasifIsleniyor(false); }
   };
 
@@ -504,10 +515,10 @@ export default function KullanicilarPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader title="Kullanıcı Yönetimi" stats={[
-        { icon: Users,      label: 'Toplam', value: toplam,             color: GRAD.indigo },
-        { icon: ShieldCheck, label: 'Admin', value: filtre === 'Admin' ? toplam : undefined,    color: GRAD.amber },
-        { icon: UserCheck,  label: 'Aktif',  value: kullanicilar.filter(k => k.aktif).length,  color: GRAD.green },
+      <PageHeader title={t('users.title')} stats={[
+        { icon: Users,      label: t('stat.total'), value: toplam,             color: GRAD.indigo },
+        { icon: ShieldCheck, label: 'Admin', value: filtre === 'admin' ? toplam : undefined,    color: GRAD.amber },
+        { icon: UserCheck,  label: t('stat.active'),  value: kullanicilar.filter(k => k.aktif).length,  color: GRAD.green },
       ]} />
 
       <div className="p-6 lg:p-8 flex-1 space-y-5">
@@ -518,7 +529,7 @@ export default function KullanicilarPage() {
           {/* Arama */}
           <div className="relative flex-1 min-w-[180px] w-full sm:w-auto">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input type="text" placeholder="Kullanıcı ara..." value={search}
+            <input type="text" placeholder={t('users.search')} value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-white outline-none focus:border-indigo-400" />
           </div>
@@ -532,18 +543,18 @@ export default function KullanicilarPage() {
 
           {/* Rol filtresi */}
           <div className="flex bg-white rounded-xl border border-gray-200 p-1 flex-shrink-0">
-            {['Tümü', 'Admin', 'Kullanıcı'].map(f => (
-              <button key={f} onClick={() => handleFiltre(f)}
+            {[{key:'all',label:t('filter.all')},{key:'admin',label:'Admin'},{key:'user',label:t('users.user')}].map(f => (
+              <button key={f.key} onClick={() => handleFiltre(f.key)}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
-                style={filtre === f ? { background: '#6366F1', color: 'white' } : { color: '#94A3B8' }}>
-                {f}
+                style={filtre === f.key ? { background: '#6366F1', color: 'white' } : { color: '#94A3B8' }}>
+                {f.label}
               </button>
             ))}
           </div>
 
           {/* Aktif/Pasif filtre */}
           <div className="flex bg-white rounded-xl border border-gray-200 p-1 flex-shrink-0">
-            {[{ k: 'tumu', l: 'Tümü' }, { k: 'aktif', l: 'Aktif' }, { k: 'pasif', l: 'Pasif' }].map(f => (
+            {[{ k: 'tumu', l: t('filter.all') }, { k: 'aktif', l: t('filter.active') }, { k: 'pasif', l: t('filter.passive') }].map(f => (
               <button key={f.k} onClick={() => { setAktifFiltre(f.k); setSayfa(1); }}
                 className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
                 style={aktifFiltre === f.k ? { background: '#10B981', color: 'white' } : { color: '#94A3B8' }}>
@@ -556,7 +567,7 @@ export default function KullanicilarPage() {
           <button onClick={() => setModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white shadow-sm flex-shrink-0"
             style={{ background: GRAD.green }}>
-            <Plus className="w-4 h-4" />Yeni Kullanıcı
+            <Plus className="w-4 h-4" />{t('users.new')}
           </button>
         </div>
 
@@ -568,7 +579,7 @@ export default function KullanicilarPage() {
         ) : filtered.length === 0 ? (
           <div className="bg-white rounded-2xl p-16 text-center border border-gray-100">
             <Users className="w-12 h-12 mx-auto mb-3 text-gray-200" />
-            <p className="text-gray-400 font-medium">Kullanıcı bulunamadı.</p>
+            <p className="text-gray-400 font-medium">{t('users.notFound')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
@@ -599,7 +610,7 @@ export default function KullanicilarPage() {
                         <h3 className={`font-semibold text-sm leading-tight truncate ${k.aktif ? 'text-gray-900' : 'text-red-600'}`}>{k.ad_soyad}</h3>
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
                           style={k.aktif ? { background: '#DCFCE7', color: '#16A34A' } : { background: '#FEE2E2', color: '#DC2626' }}>
-                          {k.aktif ? 'Aktif' : 'Pasif'}
+                          {k.aktif ? t('status.active') : t('status.passive')}
                         </span>
                       </div>
                       <div>
@@ -616,7 +627,7 @@ export default function KullanicilarPage() {
                         ) : (
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
                             style={{ background: '#EEF2FF', color: '#6366F1' }}>
-                            <ShieldCheck className="w-2.5 h-2.5" />Kullanıcı
+                            <ShieldCheck className="w-2.5 h-2.5" />{t('users.user')}
                           </span>
                         )}
                       </div>
@@ -625,20 +636,20 @@ export default function KullanicilarPage() {
                       {k.aktif && (
                         <button onClick={() => handleDuzenleAc(k)}
                           className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-indigo-100 transition-colors"
-                          style={{ background: '#EEF2FF' }} title="Düzenle">
+                          style={{ background: '#EEF2FF' }} title={t('action.edit')}>
                           <Pencil className="w-3.5 h-3.5" style={{ color: '#6366F1' }} />
                         </button>
                       )}
                       {k.aktif ? (
                         <button onClick={() => setPasifOnay({ id: k.id, ad_soyad: k.ad_soyad })}
                           className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-100 transition-colors"
-                          style={{ background: '#FEF2F2' }} title="Pasifleştir">
+                          style={{ background: '#FEF2F2' }} title={t('action.deactivate')}>
                           <Power className="w-3.5 h-3.5" style={{ color: '#EF4444' }} />
                         </button>
                       ) : (
                         <button onClick={() => setGeriAlKullanici(k)}
                           className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-green-100 transition-colors"
-                          style={{ background: '#DCFCE7' }} title="Geri Al">
+                          style={{ background: '#DCFCE7' }} title={t('action.restore')}>
                           <RotateCcw className="w-3.5 h-3.5" style={{ color: '#16A34A' }} />
                         </button>
                       )}
@@ -695,7 +706,7 @@ export default function KullanicilarPage() {
                 style={{ background: '#FEF2F2' }}>
                 <Power className="w-8 h-8 text-red-500" />
               </div>
-              <h3 className="text-lg font-black text-gray-900 mb-1">Kullanıcıyı Pasife Al</h3>
+              <h3 className="text-lg font-black text-gray-900 mb-1">{t('users.deactivateTitle')}</h3>
 
               {/* Kullanıcı adı chip */}
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full mb-5"
@@ -713,11 +724,11 @@ export default function KullanicilarPage() {
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                   <div className="space-y-1">
-                    <p className="text-xs font-bold text-red-700">Bu işlemin sonuçları:</p>
+                    <p className="text-xs font-bold text-red-700">{t('users.deactivateConsequences')}</p>
                     <ul className="text-xs text-red-600 space-y-0.5">
-                      <li>• Kullanıcı sisteme giriş yapamaz</li>
-                      <li>• Mevcut oturumu anında sonlandırılır</li>
-                      <li>• Tüm yetkiler askıya alınır</li>
+                      <li>• {t('users.deactivate.noLogin')}</li>
+                      <li>• {t('users.deactivate.sessionEnd')}</li>
+                      <li>• {t('users.deactivate.permsSuspended')}</li>
                     </ul>
                   </div>
                 </div>
@@ -731,7 +742,7 @@ export default function KullanicilarPage() {
                 className="py-3.5 rounded-2xl font-bold text-sm transition-colors"
                 style={{ background: '#F3F4F6', color: '#6B7280' }}
               >
-                Vazgeç
+                {t('action.giveUp')}
               </button>
               <button
                 onClick={handleDeact}
@@ -740,7 +751,7 @@ export default function KullanicilarPage() {
                 style={{ background: 'linear-gradient(135deg,#EF4444,#DC2626)' }}
               >
                 {pasifIsleniyor && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                Evet, Pasife Al
+                {t('action.yesDeactivate')}
               </button>
             </div>
           </div>
@@ -767,7 +778,7 @@ export default function KullanicilarPage() {
                 style={{ background: '#F0FDF4' }}>
                 <Power className="w-8 h-8" style={{ color: '#16A34A' }} />
               </div>
-              <h3 className="text-lg font-black text-gray-900 mb-1">Kullanıcıyı Aktife Al</h3>
+              <h3 className="text-lg font-black text-gray-900 mb-1">{t('users.activateTitle')}</h3>
 
               {/* Kullanıcı adı chip */}
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full mb-5"
@@ -785,11 +796,11 @@ export default function KullanicilarPage() {
                 <div className="flex items-start gap-3">
                   <UserCheck className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#16A34A' }} />
                   <div className="space-y-1">
-                    <p className="text-xs font-bold" style={{ color: '#15803D' }}>Aktife alınca ne olur?</p>
+                    <p className="text-xs font-bold" style={{ color: '#15803D' }}>{t('users.activateInfo')}</p>
                     <ul className="text-xs space-y-0.5" style={{ color: '#166534' }}>
-                      <li>• Kullanıcı sisteme tekrar giriş yapabilir</li>
-                      <li>• Tüm yetkileri yeniden devreye girer</li>
-                      <li>• Hesap engeli kaldırılır</li>
+                      <li>• {t('users.activate.canLogin')}</li>
+                      <li>• {t('users.activate.permsRestore')}</li>
+                      <li>• {t('users.activate.unblocked')}</li>
                     </ul>
                   </div>
                 </div>
@@ -803,7 +814,7 @@ export default function KullanicilarPage() {
                 className="py-3.5 rounded-2xl font-bold text-sm transition-colors"
                 style={{ background: '#F3F4F6', color: '#6B7280' }}
               >
-                Vazgeç
+                {t('action.giveUp')}
               </button>
               <button
                 onClick={handleAktif}
@@ -812,7 +823,7 @@ export default function KullanicilarPage() {
                 style={{ background: 'linear-gradient(135deg,#22C55E,#16A34A)' }}
               >
                 {aktifIsleniyor && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                Evet, Aktife Al
+                {t('action.yesActivate')}
               </button>
             </div>
           </div>
@@ -821,47 +832,47 @@ export default function KullanicilarPage() {
 
       {/* ── Yeni Kullanıcı Modalı ── */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setModalOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center gap-3 mb-5">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: GRAD.green }}>
                 <Users className="w-5 h-5 text-white" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900">Yeni Kullanıcı</h3>
+              <h3 className="text-lg font-bold text-gray-900">{t('users.new')}</h3>
             </div>
             <form onSubmit={handleSave} className="space-y-4">
               {[
-                { l: 'Ad Soyad *', k: 'ad_soyad', t: 'text'     },
-                { l: 'E-posta *',  k: 'email',    t: 'email'    },
-                { l: 'Şifre *',    k: 'sifre',    t: 'password', min: 8 },
-                { l: 'Telefon',    k: 'telefon',  t: 'tel'      },
+                { l: `${t('users.fullName')} *`, k: 'ad_soyad', tp: 'text'     },
+                { l: `${t('users.email')} *`,  k: 'email',    tp: 'email'    },
+                { l: `${t('users.password')} *`,    k: 'sifre',    tp: 'password', min: 8 },
+                { l: t('users.phone'),    k: 'telefon',  tp: 'tel'      },
               ].map(f => (
                 <div key={f.k}>
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{f.l}</label>
-                  <input type={f.t} value={form[f.k]} required={f.l.includes('*')}
+                  <input type={f.tp} value={form[f.k]} required={f.l.includes('*')}
                     minLength={f.min || undefined}
                     onChange={e => setForm({ ...form, [f.k]: e.target.value })}
                     className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-indigo-400 bg-gray-50" />
-                  {f.min && <p className="text-[10px] text-gray-400 mt-1">En az {f.min} karakter</p>}
+                  {f.min && <p className="text-[10px] text-gray-400 mt-1">{t('users.minChars').replace('{n}', f.min)}</p>}
                 </div>
               ))}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Rol</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{t('users.role')}</label>
                 <select value={form.rol} onChange={e => setForm({ ...form, rol: e.target.value })}
                   className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none bg-gray-50">
-                  <option value="kullanici">Kullanıcı</option>
-                  <option value="admin">Admin</option>
+                  <option value="kullanici">{t('users.user')}</option>
+                  <option value="admin">{t('users.admin')}</option>
                 </select>
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setModalOpen(false)}
                   className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">
-                  İptal
+                  {t('action.cancel')}
                 </button>
                 <button type="submit" disabled={saving}
                   className="flex-1 py-3 rounded-xl text-sm font-bold text-white"
                   style={{ background: GRAD.green }}>
-                  {saving ? 'Oluşturuluyor...' : 'Oluştur'}
+                  {saving ? t('users.creating') : t('users.create')}
                 </button>
               </div>
             </form>
@@ -874,7 +885,6 @@ export default function KullanicilarPage() {
         <div
           className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center"
           style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }}
-          onClick={e => e.target === e.currentTarget && setDuzenleKul(null)}
         >
           <div className="bg-white w-full sm:max-w-lg sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             {/* Mor üst bant */}
@@ -904,7 +914,7 @@ export default function KullanicilarPage() {
 
               {/* Ad Soyad */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Ad Soyad</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{t('users.fullName')}</label>
                 <input
                   type="text"
                   value={duzenleForm.ad_soyad}
@@ -915,7 +925,7 @@ export default function KullanicilarPage() {
 
               {/* E-posta */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">E-posta</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{t('users.email')}</label>
                 <input
                   type="email"
                   value={duzenleForm.email}
@@ -926,7 +936,7 @@ export default function KullanicilarPage() {
 
               {/* Telefon */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Telefon</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{t('users.phone')}</label>
                 <input
                   type="tel"
                   value={duzenleForm.telefon}
@@ -938,7 +948,7 @@ export default function KullanicilarPage() {
               {/* Yeni Şifre */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
-                  Yeni Şifre <span className="normal-case font-normal text-gray-400">(boş bırakılırsa değişmez)</span>
+                  {t('users.newPassword')} <span className="normal-case font-normal text-gray-400">({t('users.newPasswordHint')})</span>
                 </label>
                 <input
                   type="password"
@@ -951,11 +961,11 @@ export default function KullanicilarPage() {
 
               {/* Rol */}
               <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Panel Erişimi</label>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('users.panelAccess')}</label>
                 <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
                   {[
-                    { val: 'kullanici', label: 'Kullanıcı' },
-                    { val: 'admin',     label: 'Admin'     },
+                    { val: 'kullanici', label: t('users.user') },
+                    { val: 'admin',     label: t('users.admin') },
                   ].map(r => (
                     <button
                       key={r.val}
@@ -972,15 +982,15 @@ export default function KullanicilarPage() {
                 </div>
               </div>
 
-              {/* İşletme Atamaları */}
+              {/* Business Assignments */}
               {isletmeler.length > 0 && (
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">İşletme Atamaları</label>
+                  <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">{t('users.businessAssignments')}</label>
 
                   {/* Seçili işletmeler — chip'ler */}
                   <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
                     {duzenleForm.isletmeler.length === 0 ? (
-                      <span className="text-xs text-gray-400 italic self-center">Henüz atama yok</span>
+                      <span className="text-xs text-gray-400 italic self-center">{t('users.noAssignments')}</span>
                     ) : duzenleForm.isletmeler.map(id => {
                       const ist = isletmeler.find(i => i.id === id);
                       if (!ist) return null;
@@ -1014,7 +1024,7 @@ export default function KullanicilarPage() {
                           onChange={e => setIsletmeArama(e.target.value)}
                           onFocus={() => setIsletmeDropdownAcik(true)}
                           onBlur={() => setTimeout(() => setIsletmeDropdownAcik(false), 150)}
-                          placeholder="İşletme ekle..."
+                          placeholder={t('users.addBusinessPlaceholder')}
                           className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
                         />
                       </div>
@@ -1049,7 +1059,7 @@ export default function KullanicilarPage() {
                               ist.ad.toLowerCase().includes(isletmeArama.toLowerCase()) ||
                               ist.kod?.toLowerCase().includes(isletmeArama.toLowerCase())
                             ).length === 0 && (
-                            <p className="px-4 py-3 text-xs text-gray-400 italic">Sonuç yok</p>
+                            <p className="px-4 py-3 text-xs text-gray-400 italic">{t('users.noResults')}</p>
                           )}
                         </div>
                       )}
@@ -1070,7 +1080,7 @@ export default function KullanicilarPage() {
                     onChange={e => setDuzenleRolId(e.target.value || null)}
                     className="w-full text-sm px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 outline-none focus:border-indigo-400 cursor-pointer"
                   >
-                    <option value="">Rol seçilmedi</option>
+                    <option value="">{t('roles.selectRole')}</option>
                     {rollerList.map(r => (
                       <option key={r.id} value={r.id}>{r.ad}{r.sistem ? ' ★' : ''}</option>
                     ))}
@@ -1086,7 +1096,7 @@ export default function KullanicilarPage() {
                 className="py-3 rounded-2xl font-bold text-sm transition-colors"
                 style={{ background: '#F3F4F6', color: '#6B7280' }}
               >
-                İptal
+                {t('action.cancel')}
               </button>
               <button
                 onClick={handleDuzenleKaydet}
@@ -1098,7 +1108,7 @@ export default function KullanicilarPage() {
                   ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   : <Save className="w-4 h-4" />
                 }
-                Kaydet
+                {t('action.save')}
               </button>
             </div>
           </div>
@@ -1122,7 +1132,7 @@ export default function KullanicilarPage() {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-gray-900 text-sm truncate">{goruntuleKul.ad_soyad}</h3>
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                    style={{ background: '#FEE2E2', color: '#DC2626' }}>Pasif</span>
+                    style={{ background: '#FEE2E2', color: '#DC2626' }}>{t('status.passive')}</span>
                 </div>
                 <button onClick={() => setGoruntuleKul(null)}
                   className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100">
@@ -1143,7 +1153,7 @@ export default function KullanicilarPage() {
               <div className="flex items-center gap-3">
                 <Shield className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 <span className="text-sm text-gray-700">
-                  {goruntuleKul.rol === 'admin' ? 'Admin' : (goruntuleKul.isletmeler?.[0]?.atanan_rol_adi || 'Kullanıcı')}
+                  {goruntuleKul.rol === 'admin' ? t('users.admin') : (goruntuleKul.isletmeler?.[0]?.atanan_rol_adi || t('users.user'))}
                 </span>
               </div>
               {(goruntuleKul.isletmeler || []).length > 0 && (
@@ -1162,12 +1172,12 @@ export default function KullanicilarPage() {
               <button onClick={() => setGoruntuleKul(null)}
                 className="py-2.5 rounded-xl font-bold text-sm text-gray-500 transition-colors"
                 style={{ background: '#F3F4F6' }}>
-                Kapat
+                {t('action.close')}
               </button>
               <button onClick={() => { setGeriAlKullanici(goruntuleKul); setGoruntuleKul(null); }}
                 className="py-2.5 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2"
                 style={{ background: '#10B981' }}>
-                <RotateCcw className="w-4 h-4" />Geri Al
+                <RotateCcw className="w-4 h-4" />{t('action.restore')}
               </button>
             </div>
           </div>
@@ -1186,8 +1196,8 @@ export default function KullanicilarPage() {
                 <RotateCcw className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <p className="font-bold text-gray-900 text-sm">Kullanıcıyı Geri Al</p>
-                <p className="text-xs text-gray-400">Bu kullanıcı tekrar aktif olacak</p>
+                <p className="font-bold text-gray-900 text-sm">{t('action.restore')}</p>
+                <p className="text-xs text-gray-400">{t('counts.restoreConfirm')}</p>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-5">
@@ -1197,13 +1207,13 @@ export default function KullanicilarPage() {
               <button onClick={() => setGeriAlKullanici(null)}
                 className="py-3 rounded-xl font-bold text-sm text-gray-500 transition-colors"
                 style={{ background: '#F3F4F6' }}>
-                Vazgeç
+                {t('action.giveUp')}
               </button>
               <button onClick={handleGeriAl}
                 className="py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-colors"
                 style={{ background: '#10B981' }}>
                 <RotateCcw className="w-4 h-4" />
-                Geri Al
+                {t('action.restore')}
               </button>
             </div>
           </div>

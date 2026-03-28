@@ -2,12 +2,15 @@ import axios from 'axios';
 
 const apiAdm = axios.create({ baseURL: '/api' });
 
-// Her istekte admin token'ını header'a ekle
+// Her istekte admin token + dil header'ını ekle
 apiAdm.interceptors.request.use((config) => {
   const token = localStorage.getItem('stoksay-adm-token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  // Kullanıcının seçtiği dili backend'e gönder
+  const lang = localStorage.getItem('stoksay-lang') || 'az';
+  config.headers['Accept-Language'] = lang;
   return config;
 });
 

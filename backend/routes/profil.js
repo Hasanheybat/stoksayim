@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { pool } = require('../lib/db');
 const authGuard = require('../middleware/authGuard');
+const { msg, messages } = require('../lib/messages');
 
 router.use(authGuard);
 
@@ -18,7 +19,7 @@ router.get('/isletmelerim', async (req, res) => {
     res.json(rows || []);
   } catch (err) {
     console.error('[profil]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -62,14 +63,14 @@ router.get('/stats', async (req, res) => {
     res.json({ sayimlar: sayimCount || 0, urunler: urunCount, depolar: depoCount });
   } catch (err) {
     console.error('[profil]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
 // PUT /api/profil/ayarlar — kullanıcı ayarlarını güncelle
 router.put('/ayarlar', async (req, res) => {
   const { ayarlar } = req.body;
-  if (!ayarlar) return res.status(400).json({ hata: 'Ayarlar zorunludur.' });
+  if (!ayarlar) return res.status(400).json({ hata: msg(req.lang, 'SETTINGS_REQUIRED') });
 
   try {
     await pool.execute(
@@ -79,7 +80,7 @@ router.put('/ayarlar', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[profil]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 

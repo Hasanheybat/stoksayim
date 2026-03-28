@@ -4,6 +4,7 @@ const { pool } = require('../lib/db');
 const authGuard = require('../middleware/authGuard');
 const adminGuard = require('../middleware/adminGuard');
 const yetkiGuard = require('../middleware/yetkiGuard');
+const { msg, messages } = require('../lib/messages');
 
 /* ── Yetki kontrol yardımcısı (PUT/DELETE için isletme_id DB'den çekilir) ── */
 async function checkDepoYetki(req, res, islem) {
@@ -15,7 +16,7 @@ async function checkDepoYetki(req, res, islem) {
   );
 
   if (!rows.length) {
-    res.status(404).json({ hata: 'Depo bulunamadı.' });
+    res.status(404).json({ hata: msg(req.lang, 'WAREHOUSE_NOT_FOUND') });
     return false;
   }
 
@@ -27,12 +28,12 @@ async function checkDepoYetki(req, res, islem) {
   );
 
   if (!kiRows.length) {
-    res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
+    res.status(403).json({ hata: msg(req.lang, 'NO_ACCESS_TO_BUSINESS') });
     return false;
   }
 
   if (!kiRows[0].yetkiler?.depo?.[islem]) {
-    res.status(403).json({ hata: `Depo ${islem} yetkiniz yok.` });
+    res.status(403).json({ hata: messages._RESOURCE_NO_PERMISSION(req.lang, 'Depo', islem) });
     return false;
   }
 
@@ -46,7 +47,7 @@ router.post('/', yetkiGuard('depo', 'ekle', 'body'), async (req, res) => {
   const { isletme_id, ad } = req.body;
 
   if (!isletme_id || !ad?.trim()) {
-    return res.status(400).json({ hata: 'isletme_id ve ad zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'WAREHOUSE_FIELDS_REQUIRED') });
   }
 
   const id = crypto.randomUUID();
@@ -58,9 +59,9 @@ router.post('/', yetkiGuard('depo', 'ekle', 'body'), async (req, res) => {
     const [rows] = await pool.execute('SELECT * FROM depolar WHERE id = ?', [id]);
     res.status(201).json(rows[0]);
   } catch (err) {
-    if (err.errno === 1062) return res.status(409).json({ hata: 'Bu depo bu işletmede zaten var.' });
+    if (err.errno === 1062) return res.status(409).json({ hata: msg(req.lang, 'WAREHOUSE_EXISTS') });
     console.error('[depolar]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -71,7 +72,7 @@ router.put('/:id', async (req, res) => {
   const { ad, kod, konum, aktif } = req.body;
 
   if (!ad?.trim()) {
-    return res.status(400).json({ hata: 'Depo adı boş olamaz.' });
+    return res.status(400).json({ hata: msg(req.lang, 'WAREHOUSE_NAME_EMPTY') });
   }
 
   // Admin ek alanları da güncelleyebilir; kullanıcı sadece ad
@@ -89,11 +90,11 @@ router.put('/:id', async (req, res) => {
   try {
     await pool.execute(`UPDATE depolar SET ${fields.join(', ')} WHERE id = ?`, params);
     const [rows] = await pool.execute('SELECT * FROM depolar WHERE id = ?', [req.params.id]);
-    if (!rows.length) return res.status(404).json({ hata: 'Depo bulunamadı.' });
+    if (!rows.length) return res.status(404).json({ hata: msg(req.lang, 'WAREHOUSE_NOT_FOUND') });
     res.json(rows[0]);
   } catch (err) {
     console.error('[depolar]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -113,18 +114,18 @@ router.delete('/:id', async (req, res) => {
     if (aktifSayimlar.length > 0) {
       await conn.rollback();
       return res.status(409).json({
-        hata: 'Bu depo aktif sayımlarda kullanılıyor.',
+        hata: msg(req.lang, 'WAREHOUSE_IN_ACTIVE_COUNTS'),
         sayimlar: aktifSayimlar.map(s => s.ad),
       });
     }
 
     await conn.execute('UPDATE depolar SET aktif = 0 WHERE id = ?', [req.params.id]);
     await conn.commit();
-    res.json({ mesaj: 'Depo silindi.' });
+    res.json({ mesaj: msg(req.lang, 'WAREHOUSE_DELETED') });
   } catch (err) {
     await conn.rollback();
     console.error('[depolar]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   } finally {
     conn.release();
   }
@@ -134,13 +135,13 @@ router.delete('/:id', async (req, res) => {
 router.put('/:id/restore', adminGuard, async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT id, aktif FROM depolar WHERE id = ?', [req.params.id]);
-    if (!rows.length) return res.status(404).json({ hata: 'Depo bulunamadı.' });
-    if (rows[0].aktif === 1) return res.status(400).json({ hata: 'Bu depo zaten aktif.' });
+    if (!rows.length) return res.status(404).json({ hata: msg(req.lang, 'WAREHOUSE_NOT_FOUND') });
+    if (rows[0].aktif === 1) return res.status(400).json({ hata: msg(req.lang, 'WAREHOUSE_ALREADY_ACTIVE') });
     await pool.execute('UPDATE depolar SET aktif = 1 WHERE id = ?', [req.params.id]);
-    res.json({ mesaj: 'Depo geri alındı.' });
+    res.json({ mesaj: msg(req.lang, 'WAREHOUSE_RESTORED') });
   } catch (err) {
     console.error('[depolar]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -151,15 +152,15 @@ router.get('/', async (req, res, next) => {
   if (req.user.rol === 'admin') return next();
 
   const { isletme_id } = req.query;
-  if (!isletme_id) return res.status(400).json({ hata: 'isletme_id zorunludur.' });
+  if (!isletme_id) return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_ID_REQUIRED') });
 
   const [kiRows] = await pool.execute(
     'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
     [req.user.id, isletme_id]
   );
 
-  if (!kiRows.length) return res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
-  if (!kiRows[0].yetkiler?.depo?.goruntule) return res.status(403).json({ hata: 'Depo görüntüleme yetkiniz yok.' });
+  if (!kiRows.length) return res.status(403).json({ hata: msg(req.lang, 'NO_ACCESS_TO_BUSINESS') });
+  if (!kiRows[0].yetkiler?.depo?.goruntule) return res.status(403).json({ hata: messages._RESOURCE_NO_PERMISSION(req.lang, 'Depo', 'görüntüleme') });
 
   const [data] = await pool.execute(
     'SELECT id, ad, konum FROM depolar WHERE isletme_id = ? AND aktif = 1 ORDER BY ad',
@@ -169,7 +170,7 @@ router.get('/', async (req, res, next) => {
   res.json({ data: data || [], toplam: data.length });
   } catch (err) {
     console.error('[depolar GET / user]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -256,7 +257,7 @@ router.get('/', async (req, res) => {
   res.json({ data: enriched, toplam });
   } catch (err) {
     console.error('[depolar GET / admin]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -271,7 +272,7 @@ router.get('/:id', async (req, res) => {
       [req.params.id]
     );
 
-    if (!rows.length) return res.status(404).json({ hata: 'Depo bulunamadı.' });
+    if (!rows.length) return res.status(404).json({ hata: msg(req.lang, 'WAREHOUSE_NOT_FOUND') });
 
     const row = rows[0];
     res.json({
@@ -281,7 +282,7 @@ router.get('/:id', async (req, res) => {
     });
   } catch (err) {
     console.error('[depolar GET /:id]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -290,7 +291,7 @@ router.post('/', async (req, res) => {
   const { isletme_id, ad, kod, konum } = req.body;
 
   if (!isletme_id || !ad) {
-    return res.status(400).json({ hata: 'isletme_id ve ad zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'WAREHOUSE_FIELDS_REQUIRED') });
   }
 
   const id = crypto.randomUUID();
@@ -303,10 +304,10 @@ router.post('/', async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     if (err.errno === 1062) {
-      return res.status(409).json({ hata: 'Bu depo kodu bu işletmede zaten var.' });
+      return res.status(409).json({ hata: msg(req.lang, 'WAREHOUSE_CODE_EXISTS') });
     }
     console.error('[depolar]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 

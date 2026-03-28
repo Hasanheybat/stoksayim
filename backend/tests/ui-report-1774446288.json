@@ -1,0 +1,10 @@
+{
+  "backend": "http://localhost:8888",
+  "summary": {
+    "passed": 31,
+    "failed": 0,
+    "total": 31,
+    "ms": 15509
+  },
+  "errors": []
+}

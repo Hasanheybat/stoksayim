@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { pool } = require('../lib/db');
 const authGuard = require('../middleware/authGuard');
 const yetkiGuard = require('../middleware/yetkiGuard');
+const { msg, messages } = require('../lib/messages');
 
 /* ── Toplanmış sayım mı kontrol helper ── */
 function isToplanmisSayim(notlar) {
@@ -20,7 +21,7 @@ async function checkSayimYetki(sayim, req, res, islem) {
   const toplanmis = isToplanmisSayim(sayim.notlar);
 
   if (!toplanmis && sayim.kullanici_id !== req.user.id) {
-    res.status(403).json({ hata: 'Bu sayıma erişim yetkiniz yok.' });
+    res.status(403).json({ hata: msg(req.lang, 'NO_ACCESS_TO_COUNT') });
     return false;
   }
   const [rows] = await pool.execute(
@@ -30,7 +31,7 @@ async function checkSayimYetki(sayim, req, res, islem) {
   // Toplanmış sayım → toplam_sayim kategorisi, normal → sayim kategorisi
   const kat = toplanmis ? 'toplam_sayim' : 'sayim';
   if (!rows.length || !rows[0].yetkiler?.[kat]?.[islem]) {
-    res.status(403).json({ hata: toplanmis ? `Toplanmış sayım ${islem} yetkiniz yok.` : `Sayım ${islem} yetkiniz yok.` });
+    res.status(403).json({ hata: messages._RESOURCE_NO_PERMISSION(req.lang, toplanmis ? 'Toplanmış sayım' : 'Sayım', islem) });
     return false;
   }
   return true;
@@ -56,7 +57,7 @@ router.get('/', async (req, res) => {
         [req.user.id, isId]
       );
       if (!kiRows.length || !kiRows[0].yetkiler?.[yetkiKat]?.goruntule) {
-        return res.status(403).json({ hata: `${yetkiKat} görüntüleme yetkiniz yok.` });
+        return res.status(403).json({ hata: messages._RESOURCE_NO_PERMISSION(req.lang, yetkiKat, 'görüntüleme') });
       }
     }
   }
@@ -84,7 +85,7 @@ router.get('/', async (req, res) => {
 
   // Normal kullanıcı sadece kendi sayımlarını görür ve isletme_id zorunlu
   if (req.user.rol !== 'admin') {
-    if (!isletme_id) return res.status(400).json({ hata: 'isletme_id zorunludur.' });
+    if (!isletme_id) return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_ID_REQUIRED') });
     where.push('s.kullanici_id = ?');
     params.push(req.user.id);
   }
@@ -123,7 +124,7 @@ router.get('/', async (req, res) => {
   res.json({ data: enriched, toplam: toplam || 0 });
   } catch (err) {
     console.error('[sayimlar GET /]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -144,7 +145,7 @@ router.get('/:id', async (req, res) => {
     [req.params.id]
   );
 
-  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: msg(req.lang, 'COUNT_NOT_FOUND') });
 
   const sayim = sayimRows[0];
 
@@ -184,7 +185,7 @@ router.get('/:id', async (req, res) => {
   res.json(result);
   } catch (err) {
     console.error('[sayimlar GET /:id]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -196,7 +197,7 @@ router.delete('/:id', async (req, res) => {
     [req.params.id]
   );
 
-  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: msg(req.lang, 'COUNT_NOT_FOUND') });
   const sayim = sayimRows[0];
 
   // Toplanmış sayım mı kontrol et
@@ -212,7 +213,7 @@ router.delete('/:id', async (req, res) => {
 
   if (req.user.rol !== 'admin') {
     if (!isToplanmis && sayim.kullanici_id !== req.user.id) {
-      return res.status(403).json({ hata: 'Bu sayımı silme yetkiniz yok.' });
+      return res.status(403).json({ hata: msg(req.lang, 'NO_ACCESS_TO_COUNT') });
     }
     const [kiRows] = await pool.execute(
       'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
@@ -221,35 +222,35 @@ router.delete('/:id', async (req, res) => {
     // Toplanmış sayım → toplam_sayim.sil, normal sayım → sayim.sil
     const yetkiKategori = isToplanmis ? 'toplam_sayim' : 'sayim';
     if (!kiRows.length || !kiRows[0].yetkiler?.[yetkiKategori]?.sil) {
-      return res.status(403).json({ hata: isToplanmis ? 'Toplanmış sayım silme yetkiniz yok.' : 'Sayım silme yetkiniz yok.' });
+      return res.status(403).json({ hata: messages._RESOURCE_NO_PERMISSION(req.lang, isToplanmis ? 'Toplanmış sayım' : 'Sayım', 'silme') });
     }
   }
 
   // Normal tamamlanmış sayımlar silinemez (toplanmış olanlar silinebilir)
   if (sayim.durum === 'tamamlandi' && !isToplanmis) {
-    return res.status(400).json({ hata: 'Tamamlanmış sayım silinemez.' });
+    return res.status(400).json({ hata: msg(req.lang, 'COMPLETED_COUNT_NO_DELETE') });
   }
 
   await pool.execute("UPDATE sayimlar SET durum = 'silindi' WHERE id = ?", [req.params.id]);
-  res.json({ mesaj: 'Sayım silindi.' });
+  res.json({ mesaj: msg(req.lang, 'COUNT_DELETED') });
   } catch (err) {
     console.error('[sayimlar DELETE /:id]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
 // PUT /api/sayimlar/:id/restore — Silinen sayımı geri al (admin only)
 router.put('/:id/restore', async (req, res) => {
-  if (req.user.rol !== 'admin') return res.status(403).json({ hata: 'Yalnızca admin bu işlemi yapabilir.' });
+  if (req.user.rol !== 'admin') return res.status(403).json({ hata: msg(req.lang, 'ONLY_ADMIN_CAN_DO_THIS') });
   try {
     const [rows] = await pool.execute('SELECT id, durum FROM sayimlar WHERE id = ?', [req.params.id]);
-    if (!rows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
-    if (rows[0].durum !== 'silindi') return res.status(400).json({ hata: 'Bu sayım silinmiş durumda değil.' });
+    if (!rows.length) return res.status(404).json({ hata: msg(req.lang, 'COUNT_NOT_FOUND') });
+    if (rows[0].durum !== 'silindi') return res.status(400).json({ hata: msg(req.lang, 'COUNT_NOT_DELETED_STATE') });
     await pool.execute("UPDATE sayimlar SET durum = 'devam' WHERE id = ?", [req.params.id]);
-    res.json({ mesaj: 'Sayım geri alındı.' });
+    res.json({ mesaj: msg(req.lang, 'COUNT_RESTORED') });
   } catch (err) {
     console.error('[sayimlar]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -258,7 +259,7 @@ router.post('/', yetkiGuard('sayim', 'ekle', 'body'), async (req, res) => {
   const { isletme_id, depo_id, ad, tarih, notlar } = req.body;
 
   if (!isletme_id || !depo_id || !ad) {
-    return res.status(400).json({ hata: 'isletme_id, depo_id ve ad zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'COUNT_FIELDS_REQUIRED') });
   }
 
   const id = crypto.randomUUID();
@@ -272,7 +273,7 @@ router.post('/', yetkiGuard('sayim', 'ekle', 'body'), async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('[sayimlar]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -285,7 +286,7 @@ router.put('/:id', async (req, res) => {
     [req.params.id]
   );
 
-  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: msg(req.lang, 'COUNT_NOT_FOUND') });
   const sayim = sayimRows[0];
 
   // Toplanmış sayım mı kontrol et
@@ -297,7 +298,7 @@ router.put('/:id', async (req, res) => {
 
   if (req.user.rol !== 'admin') {
     if (!isToplanmis && sayim.kullanici_id !== req.user.id) {
-      return res.status(403).json({ hata: 'Bu sayımı düzenleme yetkiniz yok.' });
+      return res.status(403).json({ hata: msg(req.lang, 'NO_ACCESS_TO_COUNT') });
     }
     const yetkiKat = isToplanmis ? 'toplam_sayim' : 'sayim';
     const [kiRows] = await pool.execute(
@@ -305,13 +306,13 @@ router.put('/:id', async (req, res) => {
       [req.user.id, sayim.isletme_id]
     );
     if (!kiRows.length || !kiRows[0].yetkiler?.[yetkiKat]?.duzenle) {
-      return res.status(403).json({ hata: `${isToplanmis ? 'Toplanmış sayım' : 'Sayım'} düzenleme yetkiniz yok.` });
+      return res.status(403).json({ hata: messages._RESOURCE_NO_PERMISSION(req.lang, isToplanmis ? 'Toplanmış sayım' : 'Sayım', 'düzenleme') });
     }
   }
 
   // Tamamlanmış sayımlarda sadece isim değiştirilebilir
   if (sayim.durum !== 'devam' && (depo_id !== undefined || kisiler !== undefined)) {
-    return res.status(400).json({ hata: 'Tamamlanmış sayımda sadece isim değiştirilebilir.' });
+    return res.status(400).json({ hata: msg(req.lang, 'COMPLETED_COUNT_NAME_ONLY') });
   }
 
   const fields = [];
@@ -343,13 +344,13 @@ router.put('/:id', async (req, res) => {
     const whereClause = normalizedUpdatedAt ? 'WHERE id = ? AND updated_at = ?' : 'WHERE id = ?';
     const [result] = await pool.execute(`UPDATE sayimlar SET ${fields.join(', ')} ${whereClause}`, updateParams);
     if (result.affectedRows === 0) {
-      return res.status(409).json({ hata: 'Bu kayıt başka biri tarafından güncellendi. Lütfen sayfayı yenileyip tekrar deneyin.' });
+      return res.status(409).json({ hata: msg(req.lang, 'OPTIMISTIC_LOCK_CONFLICT') });
     }
     const [rows] = await pool.execute('SELECT * FROM sayimlar WHERE id = ?', [req.params.id]);
     res.json(rows[0]);
   } catch (err) {
     console.error('[sayimlar]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -361,13 +362,13 @@ router.put('/:id/tamamla', async (req, res) => {
     [req.params.id]
   );
 
-  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: msg(req.lang, 'COUNT_NOT_FOUND') });
   const sayim = sayimRows[0];
 
   if (!await checkSayimYetki(sayim, req, res, 'duzenle')) return;
 
   if (sayim.durum !== 'devam') {
-    return res.status(400).json({ hata: 'Sadece devam eden sayımlar tamamlanabilir.' });
+    return res.status(400).json({ hata: msg(req.lang, 'ONLY_ONGOING_CAN_COMPLETE') });
   }
 
   await pool.execute("UPDATE sayimlar SET durum = 'tamamlandi' WHERE id = ?", [req.params.id]);
@@ -375,7 +376,7 @@ router.put('/:id/tamamla', async (req, res) => {
   res.json(rows[0]);
   } catch (err) {
     console.error('[sayimlar PUT /:id/tamamla]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -383,7 +384,7 @@ router.put('/:id/tamamla', async (req, res) => {
 router.put('/:id/yeniden-ac', async (req, res) => {
   try {
   if (req.user.rol !== 'admin') {
-    return res.status(403).json({ hata: 'Sayımı yeniden açma yetkisi yalnızca adminlere aittir.' });
+    return res.status(403).json({ hata: msg(req.lang, 'REOPEN_ADMIN_ONLY') });
   }
 
   const [sayimRows] = await pool.execute(
@@ -391,15 +392,15 @@ router.put('/:id/yeniden-ac', async (req, res) => {
     [req.params.id]
   );
 
-  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
-  if (sayimRows[0].durum === 'devam') return res.status(400).json({ hata: 'Sayım zaten açık durumda.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: msg(req.lang, 'COUNT_NOT_FOUND') });
+  if (sayimRows[0].durum === 'devam') return res.status(400).json({ hata: msg(req.lang, 'COUNT_ALREADY_OPEN') });
 
   await pool.execute("UPDATE sayimlar SET durum = 'devam' WHERE id = ?", [req.params.id]);
   const [rows] = await pool.execute('SELECT * FROM sayimlar WHERE id = ?', [req.params.id]);
   res.json(rows[0]);
   } catch (err) {
     console.error('[sayimlar PUT /:id/yeniden-ac]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -412,7 +413,7 @@ router.get('/:id/kalemler', async (req, res) => {
     [req.params.id]
   );
 
-  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: msg(req.lang, 'COUNT_NOT_FOUND') });
   const sayim = sayimRows[0];
 
   if (!await checkSayimYetki(sayim, req, res, 'goruntule')) return;
@@ -440,7 +441,7 @@ router.get('/:id/kalemler', async (req, res) => {
   res.json(enriched);
   } catch (err) {
     console.error('[sayimlar GET /:id/kalemler]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -449,10 +450,10 @@ router.post('/:id/kalem', async (req, res) => {
   const { urun_id, miktar, birim, notlar } = req.body;
 
   if (!urun_id || miktar === undefined) {
-    return res.status(400).json({ hata: 'urun_id ve miktar zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'ITEM_ID_AND_QUANTITY_REQUIRED') });
   }
   if (isNaN(Number(miktar))) {
-    return res.status(400).json({ hata: 'miktar sayısal bir değer olmalıdır.' });
+    return res.status(400).json({ hata: msg(req.lang, 'QUANTITY_MUST_BE_NUMBER') });
   }
 
   const conn = await pool.getConnection();
@@ -465,24 +466,24 @@ router.post('/:id/kalem', async (req, res) => {
       [req.params.id]
     );
 
-    if (!sayimRows.length) { await conn.rollback(); return res.status(404).json({ hata: 'Sayım bulunamadı.' }); }
+    if (!sayimRows.length) { await conn.rollback(); return res.status(404).json({ hata: msg(req.lang, 'COUNT_NOT_FOUND') }); }
     const sayim = sayimRows[0];
 
     if (!await checkSayimYetki(sayim, req, res, 'duzenle')) { await conn.rollback(); return; }
 
     if (sayim.durum !== 'devam') {
       await conn.rollback();
-      return res.status(400).json({ hata: 'Tamamlanmış sayıma kalem eklenemez.' });
+      return res.status(400).json({ hata: msg(req.lang, 'COMPLETED_COUNT_NO_ADD_ITEM') });
     }
 
     // Ürünün aynı işletmeye ait olduğunu kontrol et
     const [urunRows] = await conn.execute(
       'SELECT isletme_id FROM isletme_urunler WHERE id = ?', [urun_id]
     );
-    if (!urunRows.length) { await conn.rollback(); return res.status(404).json({ hata: 'Ürün bulunamadı.' }); }
+    if (!urunRows.length) { await conn.rollback(); return res.status(404).json({ hata: msg(req.lang, 'PRODUCT_NOT_FOUND') }); }
     if (urunRows[0].isletme_id !== sayim.isletme_id) {
       await conn.rollback();
-      return res.status(400).json({ hata: 'Bu ürün bu işletmeye ait değil.' });
+      return res.status(400).json({ hata: msg(req.lang, 'PRODUCT_NOT_IN_BUSINESS') });
     }
 
     const id = crypto.randomUUID();
@@ -513,7 +514,7 @@ router.post('/:id/kalem', async (req, res) => {
   } catch (err) {
     await conn.rollback();
     console.error('[sayimlar]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   } finally {
     conn.release();
   }
@@ -528,19 +529,19 @@ router.put('/:id/kalem/:kalem_id', async (req, res) => {
     'SELECT kullanici_id, isletme_id, durum, notlar AS notlar_json FROM sayimlar WHERE id = ?',
     [req.params.id]
   );
-  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: msg(req.lang, 'COUNT_NOT_FOUND') });
   const sayim = { ...sayimRows[0], notlar: sayimRows[0].notlar_json };
 
   if (!await checkSayimYetki(sayim, req, res, 'duzenle')) return;
 
-  if (sayim.durum !== 'devam') return res.status(400).json({ hata: 'Tamamlanmış sayım düzenlenemez.' });
+  if (sayim.durum !== 'devam') return res.status(400).json({ hata: msg(req.lang, 'COMPLETED_COUNT_NO_EDIT') });
 
   const updates = [];
   const values = [];
   if (miktar !== undefined) { updates.push('miktar = ?'); values.push(miktar); }
   if (birim !== undefined) { updates.push('birim = ?'); values.push(birim); }
   if (notlar !== undefined) { updates.push('notlar = ?'); values.push(notlar); }
-  if (!updates.length) return res.status(400).json({ hata: 'Güncellenecek alan yok.' });
+  if (!updates.length) return res.status(400).json({ hata: msg(req.lang, 'NO_FIELDS_TO_UPDATE') });
   values.push(req.params.kalem_id, req.params.id);
 
   await pool.execute(
@@ -549,11 +550,11 @@ router.put('/:id/kalem/:kalem_id', async (req, res) => {
   );
 
   const [rows] = await pool.execute('SELECT * FROM sayim_kalemleri WHERE id = ? AND sayim_id = ?', [req.params.kalem_id, req.params.id]);
-  if (!rows.length) return res.status(404).json({ hata: 'Kalem bulunamadı.' });
+  if (!rows.length) return res.status(404).json({ hata: msg(req.lang, 'ITEM_NOT_FOUND') });
   res.json(rows[0]);
   } catch (err) {
     console.error('[sayimlar PUT /:id/kalem/:kalem_id]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -564,22 +565,22 @@ router.delete('/:id/kalem/:kalem_id', async (req, res) => {
     'SELECT kullanici_id, isletme_id, durum, notlar FROM sayimlar WHERE id = ?',
     [req.params.id]
   );
-  if (!sayimRows.length) return res.status(404).json({ hata: 'Sayım bulunamadı.' });
+  if (!sayimRows.length) return res.status(404).json({ hata: msg(req.lang, 'COUNT_NOT_FOUND') });
   const sayim = sayimRows[0];
 
   if (!await checkSayimYetki(sayim, req, res, 'duzenle')) return;
 
-  if (sayim.durum !== 'devam') return res.status(400).json({ hata: 'Tamamlanmış sayımdan kalem silinemez.' });
+  if (sayim.durum !== 'devam') return res.status(400).json({ hata: msg(req.lang, 'COMPLETED_COUNT_NO_DELETE_ITEM') });
 
   await pool.execute(
     'DELETE FROM sayim_kalemleri WHERE id = ? AND sayim_id = ?',
     [req.params.kalem_id, req.params.id]
   );
 
-  res.json({ mesaj: 'Kalem silindi.' });
+  res.json({ mesaj: msg(req.lang, 'ITEM_DELETED') });
   } catch (err) {
     console.error('[sayimlar DELETE /:id/kalem/:kalem_id]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -588,13 +589,13 @@ router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, re
   const { sayim_ids, ad, isletme_id } = req.body;
 
   if (!sayim_ids || !Array.isArray(sayim_ids) || sayim_ids.length < 2) {
-    return res.status(400).json({ hata: 'En az 2 sayım seçilmelidir.' });
+    return res.status(400).json({ hata: msg(req.lang, 'MERGE_MIN_TWO') });
   }
   if (!ad || !ad.trim()) {
-    return res.status(400).json({ hata: 'Toplanmış sayım adı zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'MERGE_NAME_REQUIRED') });
   }
   if (!isletme_id) {
-    return res.status(400).json({ hata: 'isletme_id zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_ID_REQUIRED') });
   }
 
   const conn = await pool.getConnection();
@@ -610,14 +611,14 @@ router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, re
 
     if (sayimlar.length !== sayim_ids.length) {
       await conn.rollback();
-      return res.status(400).json({ hata: 'Sadece tamamlanmış sayımlar birleştirilebilir.' });
+      return res.status(400).json({ hata: msg(req.lang, 'MERGE_ONLY_COMPLETED') });
     }
 
     // Tüm sayımların aynı işletmeye ait olduğunu doğrula
     const ilkIsletmeId = sayimlar[0].isletme_id;
     if (!sayimlar.every(s => s.isletme_id === ilkIsletmeId)) {
       await conn.rollback();
-      return res.status(400).json({ hata: 'Tüm sayımlar aynı işletmeye ait olmalıdır.' });
+      return res.status(400).json({ hata: msg(req.lang, 'MERGE_SAME_BUSINESS') });
     }
 
     // Yetki kontrolü — kullanıcı sadece kendi sayımlarını toplayabilir (admin hariç)
@@ -625,7 +626,7 @@ router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, re
       const yetkisiz = sayimlar.find(s => s.kullanici_id !== req.user.id);
       if (yetkisiz) {
         await conn.rollback();
-        return res.status(403).json({ hata: 'Sadece kendi sayımlarınızı toplayabilirsiniz.' });
+        return res.status(403).json({ hata: msg(req.lang, 'MERGE_OWN_COUNTS_ONLY') });
       }
     }
 
@@ -681,7 +682,7 @@ router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, re
     await conn.rollback();
     console.error('Sayım toplama hatası:', err);
     console.error('[sayimlar]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   } finally {
     conn.release();
   }

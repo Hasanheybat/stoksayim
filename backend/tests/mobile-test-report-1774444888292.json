@@ -1,0 +1,32 @@
+{
+  "type": "mobile-api-compat",
+  "backend": "http://localhost:8888",
+  "timestamp": "2026-03-25T13:21:28.292Z",
+  "summary": {
+    "passed": 22,
+    "failed": 5,
+    "total": 27
+  },
+  "errors": [
+    {
+      "name": "📱 Login (AuthService.login)",
+      "error": "Status 429"
+    },
+    {
+      "name": "📱 Auth me (AuthProvider.oturumKontrol)",
+      "error": "Status 401"
+    },
+    {
+      "name": "📱 İşletmelerim (ProfilService → isletme seçimi)",
+      "error": "Status 401"
+    },
+    {
+      "name": "📱 Profil stats (HomeScreen istatistik)",
+      "error": "Status 401"
+    },
+    {
+      "name": "📱 Response format — Login response",
+      "error": "Cannot read properties of undefined (reading 'id')"
+    }
+  ]
+}

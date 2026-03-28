@@ -6,6 +6,7 @@ const { pool } = require('../lib/db');
 const authGuard = require('../middleware/authGuard');
 const adminGuard = require('../middleware/adminGuard');
 const yetkiGuard = require('../middleware/yetkiGuard');
+const { msg, messages } = require('../lib/messages');
 
 const IZINLI_MIME_TURLERI = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
@@ -39,7 +40,7 @@ async function checkUrunYetki(req, res, islem) {
   );
 
   if (!rows.length) {
-    res.status(404).json({ hata: 'Ürün bulunamadı.' });
+    res.status(404).json({ hata: msg(req.lang, 'PRODUCT_NOT_FOUND') });
     return false;
   }
 
@@ -51,12 +52,12 @@ async function checkUrunYetki(req, res, islem) {
   );
 
   if (!kiRows.length) {
-    res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
+    res.status(403).json({ hata: msg(req.lang, 'NO_ACCESS_TO_BUSINESS') });
     return false;
   }
 
   if (!kiRows[0].yetkiler?.urun?.[islem]) {
-    res.status(403).json({ hata: `Ürün ${islem} yetkiniz yok.` });
+    res.status(403).json({ hata: messages._RESOURCE_NO_PERMISSION(req.lang, 'Ürün', islem) });
     return false;
   }
 
@@ -96,7 +97,7 @@ router.put('/:id', async (req, res) => {
 
   const { urun_adi, urun_kodu, isim_2, barkodlar, birim } = req.body;
 
-  if (!urun_adi?.trim()) return res.status(400).json({ hata: 'İsim 1 (sayım ismi) boş olamaz.' });
+  if (!urun_adi?.trim()) return res.status(400).json({ hata: msg(req.lang, 'PRODUCT_NAME_EMPTY') });
   // urun_kodu boşsa mevcut kodu koru
   const kodGuncelle = urun_kodu?.trim() || null;
 
@@ -115,7 +116,7 @@ router.put('/:id', async (req, res) => {
       const cakisan = await barkodBenzersizKontrol(urunRow[0].isletme_id, barkodArr, req.params.id, conn);
       if (cakisan) {
         await conn.rollback();
-        return res.status(409).json({ hata: `"${cakisan.barkod}" barkodu "${cakisan.urunAdi}" ürününe zaten tanımlı.` });
+        return res.status(409).json({ hata: messages._BARCODE_CONFLICT(req.lang, cakisan.barkod, cakisan.urunAdi) });
       }
     }
 
@@ -135,13 +136,13 @@ router.put('/:id', async (req, res) => {
     await conn.commit();
 
     const [rows] = await pool.execute('SELECT * FROM isletme_urunler WHERE id = ?', [req.params.id]);
-    if (!rows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
+    if (!rows.length) return res.status(404).json({ hata: msg(req.lang, 'PRODUCT_NOT_FOUND') });
     res.json(rows[0]);
   } catch (err) {
     await conn.rollback();
     console.error('[PUT /urunler/:id]', err.message);
     console.error('[urunler]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   } finally {
     conn.release();
   }
@@ -152,7 +153,7 @@ router.post('/', yetkiGuard('urun', 'ekle', 'body'), async (req, res) => {
   const { isletme_id, urun_kodu, urun_adi, isim_2, birim, barkodlar, kategori } = req.body;
 
   if (!isletme_id || !urun_adi?.trim()) {
-    return res.status(400).json({ hata: 'isletme_id ve urun_adi zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'PRODUCT_NAME_REQUIRED') });
   }
 
   const barkodArr = Array.isArray(barkodlar)
@@ -171,7 +172,7 @@ router.post('/', yetkiGuard('urun', 'ekle', 'body'), async (req, res) => {
       const cakisan = await barkodBenzersizKontrol(isletme_id, barkodArr, null, conn);
       if (cakisan) {
         await conn.rollback();
-        return res.status(409).json({ hata: `"${cakisan.barkod}" barkodu "${cakisan.urunAdi}" ürününe zaten tanımlı.` });
+        return res.status(409).json({ hata: messages._BARCODE_CONFLICT(req.lang, cakisan.barkod, cakisan.urunAdi) });
       }
     }
 
@@ -188,9 +189,9 @@ router.post('/', yetkiGuard('urun', 'ekle', 'body'), async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     await conn.rollback();
-    if (err.errno === 1062) return res.status(409).json({ hata: 'Bu ürün kodu bu işletmede zaten var.' });
+    if (err.errno === 1062) return res.status(409).json({ hata: msg(req.lang, 'PRODUCT_CODE_EXISTS') });
     console.error('[urunler]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   } finally {
     conn.release();
   }
@@ -214,18 +215,18 @@ router.delete('/:id', async (req, res) => {
     if (aktifSayimlar.length > 0) {
       await conn.rollback();
       return res.status(409).json({
-        hata: 'Bu ürün aktif sayımlarda kullanılıyor.',
+        hata: msg(req.lang, 'PRODUCT_IN_ACTIVE_COUNTS'),
         sayimlar: aktifSayimlar.map(s => s.ad),
       });
     }
 
     await conn.execute('UPDATE isletme_urunler SET aktif = 0 WHERE id = ?', [req.params.id]);
     await conn.commit();
-    res.json({ mesaj: 'Ürün silindi.' });
+    res.json({ mesaj: msg(req.lang, 'PRODUCT_DELETED') });
   } catch (err) {
     await conn.rollback();
     console.error('[urunler]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   } finally {
     conn.release();
   }
@@ -235,13 +236,13 @@ router.delete('/:id', async (req, res) => {
 router.put('/:id/restore', adminGuard, async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT id, aktif FROM isletme_urunler WHERE id = ?', [req.params.id]);
-    if (!rows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
-    if (rows[0].aktif === 1) return res.status(400).json({ hata: 'Bu ürün zaten aktif.' });
+    if (!rows.length) return res.status(404).json({ hata: msg(req.lang, 'PRODUCT_NOT_FOUND') });
+    if (rows[0].aktif === 1) return res.status(400).json({ hata: msg(req.lang, 'PRODUCT_ALREADY_ACTIVE') });
     await pool.execute('UPDATE isletme_urunler SET aktif = 1, son_guncelleme = NOW() WHERE id = ?', [req.params.id]);
-    res.json({ mesaj: 'Ürün geri alındı.' });
+    res.json({ mesaj: msg(req.lang, 'PRODUCT_RESTORED') });
   } catch (err) {
     console.error('[urunler]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -251,18 +252,18 @@ router.get('/barkod/:barkod', async (req, res, next) => {
   if (req.user.rol === 'admin') return next();
 
   const { isletme_id } = req.query;
-  if (!isletme_id) return res.status(400).json({ hata: 'isletme_id zorunludur.' });
+  if (!isletme_id) return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_ID_REQUIRED') });
 
   const [kiRows] = await pool.execute(
     'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
     [req.user.id, isletme_id]
   );
 
-  if (!kiRows.length) return res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
+  if (!kiRows.length) return res.status(403).json({ hata: msg(req.lang, 'NO_ACCESS_TO_BUSINESS') });
   const yetkiler = kiRows[0].yetkiler;
   // Ürün görüntüleme VEYA sayım ekleme/düzenleme yetkisi varsa ürün aramasına izin ver
   if (!yetkiler?.urun?.goruntule && !yetkiler?.sayim?.ekle && !yetkiler?.sayim?.duzenle) {
-    return res.status(403).json({ hata: 'Ürün görüntüleme yetkiniz yok.' });
+    return res.status(403).json({ hata: messages._RESOURCE_NO_PERMISSION(req.lang, 'Ürün', 'görüntüleme') });
   }
 
   const [data] = await pool.execute(
@@ -275,11 +276,11 @@ router.get('/barkod/:barkod', async (req, res, next) => {
     return barkodlar.includes(req.params.barkod);
   });
 
-  if (!urun) return res.status(404).json({ hata: 'Barkod sistemde bulunamadı.' });
+  if (!urun) return res.status(404).json({ hata: msg(req.lang, 'BARCODE_NOT_FOUND') });
   res.json(urun);
   } catch (err) {
     console.error('[urunler GET /barkod user]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -290,18 +291,18 @@ router.get('/', async (req, res, next) => {
   if (req.user.rol === 'admin') return next();
 
   const { isletme_id, q } = req.query;
-  if (!isletme_id) return res.status(400).json({ hata: 'isletme_id zorunludur.' });
+  if (!isletme_id) return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_ID_REQUIRED') });
 
   const [kiRows] = await pool.execute(
     'SELECT yetkiler FROM kullanici_isletme WHERE kullanici_id = ? AND isletme_id = ? AND aktif = 1',
     [req.user.id, isletme_id]
   );
 
-  if (!kiRows.length) return res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
+  if (!kiRows.length) return res.status(403).json({ hata: msg(req.lang, 'NO_ACCESS_TO_BUSINESS') });
   const yetkiler = kiRows[0].yetkiler;
   // Ürün görüntüleme VEYA sayım ekleme/düzenleme yetkisi varsa ürün aramasına izin ver
   if (!yetkiler?.urun?.goruntule && !yetkiler?.sayim?.ekle && !yetkiler?.sayim?.duzenle) {
-    return res.status(403).json({ hata: 'Ürün görüntüleme yetkiniz yok.' });
+    return res.status(403).json({ hata: messages._RESOURCE_NO_PERMISSION(req.lang, 'Ürün', 'görüntüleme') });
   }
 
   const where = ['isletme_id = ?', 'aktif = 1'];
@@ -323,7 +324,7 @@ router.get('/', async (req, res, next) => {
   res.json(data || []);
   } catch (err) {
     console.error('[urunler GET / user]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -422,7 +423,7 @@ router.get('/', async (req, res) => {
   res.json({ data: enriched, toplam, sayfa: parseInt(sayfa), limit: parseInt(limit) });
   } catch (err) {
     console.error('[urunler GET / admin]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -432,7 +433,7 @@ router.get('/barkod/:barkod', async (req, res) => {
   const { isletme_id } = req.query;
 
   if (!isletme_id) {
-    return res.status(400).json({ hata: 'isletme_id zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_ID_REQUIRED') });
   }
 
   const [data] = await pool.execute(
@@ -445,11 +446,11 @@ router.get('/barkod/:barkod', async (req, res) => {
     return barkodlar.includes(req.params.barkod);
   });
 
-  if (!urun) return res.status(404).json({ hata: 'Barkod sistemde bulunamadı.' });
+  if (!urun) return res.status(404).json({ hata: msg(req.lang, 'BARCODE_NOT_FOUND') });
   res.json(urun);
   } catch (err) {
     console.error('[urunler GET /barkod admin]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -461,11 +462,11 @@ router.get('/:id', async (req, res) => {
       [req.params.id]
     );
 
-    if (!rows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
+    if (!rows.length) return res.status(404).json({ hata: msg(req.lang, 'PRODUCT_NOT_FOUND') });
     res.json(rows[0]);
   } catch (err) {
     console.error('[urunler GET /:id]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -475,9 +476,9 @@ router.post('/:id/barkod', async (req, res) => {
   try {
   const { barkod } = req.body;
 
-  if (!barkod) return res.status(400).json({ hata: 'barkod zorunludur.' });
+  if (!barkod) return res.status(400).json({ hata: msg(req.lang, 'BARCODE_REQUIRED') });
   if (!/^[a-zA-Z0-9\-]{1,50}$/.test(barkod)) {
-    return res.status(400).json({ hata: 'Geçerli bir barkod giriniz.' });
+    return res.status(400).json({ hata: msg(req.lang, 'INVALID_BARCODE') });
   }
 
   const conn = await pool.getConnection();
@@ -489,7 +490,7 @@ router.post('/:id/barkod', async (req, res) => {
       [req.params.id]
     );
 
-    if (!mevcutRows.length) { await conn.rollback(); return res.status(404).json({ hata: 'Ürün bulunamadı.' }); }
+    if (!mevcutRows.length) { await conn.rollback(); return res.status(404).json({ hata: msg(req.lang, 'PRODUCT_NOT_FOUND') }); }
 
     const barkodlar = (mevcutRows[0].barkodlar || '')
       .split(',')
@@ -498,14 +499,14 @@ router.post('/:id/barkod', async (req, res) => {
 
     if (barkodlar.includes(barkod)) {
       await conn.rollback();
-      return res.status(409).json({ hata: 'Bu barkod zaten bu ürüne tanımlı.' });
+      return res.status(409).json({ hata: msg(req.lang, 'BARCODE_ALREADY_ON_PRODUCT') });
     }
 
     // Aynı işletmede başka üründe bu barkod var mı?
     const cakisan = await barkodBenzersizKontrol(mevcutRows[0].isletme_id, [barkod], req.params.id);
     if (cakisan) {
       await conn.rollback();
-      return res.status(409).json({ hata: `"${barkod}" barkodu "${cakisan.urunAdi}" ürününe zaten tanımlı.` });
+      return res.status(409).json({ hata: messages._BARCODE_CONFLICT(req.lang, barkod, cakisan.urunAdi) });
     }
 
     barkodlar.push(barkod);
@@ -527,7 +528,7 @@ router.post('/:id/barkod', async (req, res) => {
   }
   } catch (err) {
     console.error('[urunler POST /:id/barkod]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -539,7 +540,7 @@ router.delete('/:id/barkod/:barkod', async (req, res) => {
     [req.params.id]
   );
 
-  if (!mevcutRows.length) return res.status(404).json({ hata: 'Ürün bulunamadı.' });
+  if (!mevcutRows.length) return res.status(404).json({ hata: msg(req.lang, 'PRODUCT_NOT_FOUND') });
 
   const barkodlar = (mevcutRows[0].barkodlar || '')
     .split(',')
@@ -555,7 +556,7 @@ router.delete('/:id/barkod/:barkod', async (req, res) => {
   res.json(rows[0]);
   } catch (err) {
     console.error('[urunler DELETE /:id/barkod]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -563,16 +564,16 @@ router.delete('/:id/barkod/:barkod', async (req, res) => {
 router.post('/yukle', (req, res, next) => {
   upload.single('dosya')(req, res, (err) => {
     if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ hata: 'Dosya 10 MB sınırını aşıyor.' });
+      return res.status(400).json({ hata: msg(req.lang, 'FILE_TOO_LARGE') });
     }
-    if (err) return res.status(400).json({ hata: 'Dosya yüklenemedi.' });
+    if (err) return res.status(400).json({ hata: msg(req.lang, 'FILE_UPLOAD_FAILED') });
     next();
   });
 }, async (req, res) => {
   const { isletme_id, preview } = req.query;
 
-  if (!isletme_id) return res.status(400).json({ hata: 'isletme_id zorunludur.' });
-  if (!req.file)   return res.status(400).json({ hata: 'Excel dosyası gereklidir.' });
+  if (!isletme_id) return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_ID_REQUIRED') });
+  if (!req.file)   return res.status(400).json({ hata: msg(req.lang, 'EXCEL_FILE_REQUIRED') });
 
   const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
   const ws = wb.Sheets[wb.SheetNames[0]];
@@ -666,7 +667,7 @@ router.post('/yukle', (req, res, next) => {
   }
 
   res.json({
-    mesaj: 'Yükleme tamamlandı.',
+    mesaj: msg(req.lang, 'UPLOAD_COMPLETE'),
     yeni: sonuclar.yeni.length,
     degisecek: sonuclar.degisecek.length,
     korunacak: sonuclar.korunacak.length,

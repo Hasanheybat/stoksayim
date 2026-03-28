@@ -1,0 +1,33 @@
+{
+  "backend": "http://localhost:8888",
+  "timestamp": "2026-03-25T13:27:17.792Z",
+  "summary": {
+    "passed": 50,
+    "failed": 1,
+    "total": 51,
+    "duration_ms": 699
+  },
+  "timings": {
+    "stats": 5,
+    "isletme_list": 2,
+    "depo_list": 2,
+    "urun_list": 3,
+    "urun_search": 2,
+    "sayim_list": 2,
+    "bulk_urun_create": 63,
+    "bulk_kalem_add": 48,
+    "sayim_detail": 2,
+    "topla": 5,
+    "admin_stats": 3,
+    "sayim_trend": 3,
+    "sync_depo": 1,
+    "sync_urun": 2,
+    "sync_sayim": 3
+  },
+  "errors": [
+    {
+      "name": "1.2 Stats — büyük veri seti doğrulama",
+      "error": "En az 100 ürün bekleniyor, 71 var"
+    }
+  ]
+}

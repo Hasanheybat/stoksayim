@@ -1,0 +1,107 @@
+{
+  "backend": "http://localhost:8888",
+  "timestamp": "2026-03-25T13:16:23.687Z",
+  "summary": {
+    "passed": 72,
+    "failed": 24,
+    "total": 96
+  },
+  "errors": [
+    {
+      "name": "Ürün — Barkod ile ara",
+      "error": "Beklenen 200, gelen 404"
+    },
+    {
+      "name": "Kullanıcı — Oluştur",
+      "error": "Beklenen 201, gelen 500 — \"\""
+    },
+    {
+      "name": "Kullanıcı — Duplicate email → 409",
+      "error": "Beklenen 409, gelen 400"
+    },
+    {
+      "name": "Kullanıcı — Listele",
+      "error": "Beklenen 200, gelen 500"
+    },
+    {
+      "name": "Kullanıcı — Detay",
+      "error": "Beklenen 200, gelen 500"
+    },
+    {
+      "name": "Kullanıcı — Güncelle",
+      "error": "Beklenen 200, gelen 500"
+    },
+    {
+      "name": "Kullanıcı — İşletme ata",
+      "error": "Beklenen 201, gelen 500"
+    },
+    {
+      "name": "Kullanıcı — Yetki güncelle",
+      "error": "Beklenen 200, gelen 500"
+    },
+    {
+      "name": "Kullanıcı — Yetki sorgula",
+      "error": "Beklenen 200, gelen 404"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı login",
+      "error": "Beklenen 200, gelen 400"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı /auth/me",
+      "error": "Beklenen 200, gelen 401"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı admin endpoint → 403",
+      "error": "Beklenen 403, gelen 401"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı kendi işletme ürünlerini listele",
+      "error": "Beklenen 200, gelen 401"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı kendi işletme depolarını listele",
+      "error": "Beklenen 200, gelen 401"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı yeni sayım oluştur",
+      "error": "Beklenen 201, gelen 401"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı yetkisiz işletme → 403",
+      "error": "Beklenen 403, gelen 401"
+    },
+    {
+      "name": "Profil — İşletmelerim",
+      "error": "Beklenen 200, gelen 401"
+    },
+    {
+      "name": "Profil — Stats",
+      "error": "Beklenen 200, gelen 401"
+    },
+    {
+      "name": "Profil — Ayarlar güncelle",
+      "error": "Beklenen 200, gelen 401"
+    },
+    {
+      "name": "Stats — Dashboard",
+      "error": "Beklenen 200, gelen 500"
+    },
+    {
+      "name": "Stats — Son sayımlar",
+      "error": "Beklenen 200, gelen 500"
+    },
+    {
+      "name": "Auth — Şifre güncelle (kısa yeni şifre) → 400",
+      "error": "Beklenen 400, gelen 401"
+    },
+    {
+      "name": "Auth — Şifre güncelle başarılı",
+      "error": "Beklenen 200, gelen 401"
+    },
+    {
+      "name": "Auth — Yeni şifre ile login",
+      "error": "Beklenen 200, gelen 400"
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 const { pool } = require('../lib/db');
+const { msg, messages } = require('../lib/messages');
 
 /**
  * Yetki kontrolü middleware factory
@@ -19,7 +20,7 @@ function yetkiGuard(kategori, islem, isletmeIdSource = 'query') {
         req.query.isletme_id;
 
       if (!isletme_id) {
-        return res.status(400).json({ hata: 'isletme_id gerekli.' });
+        return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_ID_MISSING') });
       }
 
       const [rows] = await pool.execute(
@@ -28,14 +29,14 @@ function yetkiGuard(kategori, islem, isletmeIdSource = 'query') {
       );
 
       if (!rows.length) {
-        return res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
+        return res.status(403).json({ hata: msg(req.lang, 'NO_ACCESS_TO_BUSINESS') });
       }
 
       const yetkiler = rows[0].yetkiler || {};
 
       if (!yetkiler[kategori] || !yetkiler[kategori][islem]) {
         return res.status(403).json({
-          hata: `${kategori} ${islem} yetkisine sahip değilsiniz.`
+          hata: messages._NO_PERMISSION(req.lang, kategori, islem)
         });
       }
 
@@ -43,7 +44,7 @@ function yetkiGuard(kategori, islem, isletmeIdSource = 'query') {
       next();
     } catch (err) {
       console.error('[yetkiGuard]', err.message);
-      return res.status(500).json({ hata: 'Sunucu hatası.' });
+      return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
     }
   };
 }

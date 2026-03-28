@@ -60,13 +60,20 @@ app.use((err, req, res, next) => {
 
 app.use(express.json());
 
+// Dil tespiti — her istekte req.lang set eder
+const langMiddleware = require('./middleware/langMiddleware');
+app.use(langMiddleware);
+
 // Rate limiting — brute-force ve DoS koruması
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,  // 15 dakika
   max: 1500,                  // IP başına 15 dk'da max 1500 istek (20 kullanıcı × dakikada 10 ürün taraması)
   standardHeaders: true,
   legacyHeaders: false,
-  message: { hata: 'Çok fazla istek gönderildi. Lütfen 15 dakika sonra tekrar deneyin.' },
+  handler: (req, res) => {
+    const { msg } = require('./lib/messages');
+    res.status(429).json({ hata: msg(req.lang, 'TOO_MANY_REQUESTS') });
+  },
 });
 
 const authLimiter = rateLimit({
@@ -74,7 +81,10 @@ const authLimiter = rateLimit({
   max: 20,                    // Login deneme limiti (brute-force)
   standardHeaders: true,
   legacyHeaders: false,
-  message: { hata: 'Çok fazla giriş denemesi. Lütfen 15 dakika sonra tekrar deneyin.' },
+  handler: (req, res) => {
+    const { msg } = require('./lib/messages');
+    res.status(429).json({ hata: msg(req.lang, 'TOO_MANY_LOGIN_ATTEMPTS') });
+  },
 });
 
 // Hassas yazma işlemleri için ayrı limiter
@@ -83,7 +93,10 @@ const writeLimiter = rateLimit({
   max: 60,                    // 15 dk'da max 60 yazma işlemi
   standardHeaders: true,
   legacyHeaders: false,
-  message: { hata: 'Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin.' },
+  handler: (req, res) => {
+    const { msg } = require('./lib/messages');
+    res.status(429).json({ hata: msg(req.lang, 'TOO_MANY_REQUESTS') });
+  },
 });
 
 app.use('/api/', apiLimiter);

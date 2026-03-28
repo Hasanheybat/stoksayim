@@ -1,0 +1,126 @@
+{
+  "backend": "http://localhost:8888",
+  "timestamp": "2026-03-25T17:40:48.321854",
+  "summary": {
+    "passed": 4,
+    "failed": 26,
+    "total": 30,
+    "duration_ms": 254843
+  },
+  "errors": [
+    {
+      "name": "1.1 Login sayfası yüklendi",
+      "error": ""
+    },
+    {
+      "name": "1.2 Admin login başarılı",
+      "error": "Locator.fill: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"input[type='email'], input[name='email'], input[placeholder*='mail']\").first\n"
+    },
+    {
+      "name": "3.1 İşletmeler sayfası açıldı",
+      "error": "Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"a:has-text('İşletme'), a[href*='isletme'], nav\").locator(\"text=İşletme\").first\n"
+    },
+    {
+      "name": "3.2 İşletme listesi görünüyor",
+      "error": ""
+    },
+    {
+      "name": "3.3 Yeni işletme oluşturuldu",
+      "error": "Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"button:has-text('Ekle'), button:has-text('Yeni'), button:has-text('ekle'), a:has-text('Ekle')\").first\n"
+    },
+    {
+      "name": "4.1 Depolar sayfası açıldı",
+      "error": "Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"a:has-text('Depo'), a[href*='depo'], nav\").locator(\"text=Depo\").first\n"
+    },
+    {
+      "name": "5.1 Stoklar sayfası açıldı",
+      "error": "Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"a:has-text('Stok'), a:has-text('Ürün'), a[href*='urun'], a[href*='stok'], nav\").locator(\"text=Stok\").first\n"
+    },
+    {
+      "name": "6.1 Kullanıcılar sayfası açıldı",
+      "error": "Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"a:has-text('Kullanıcı'), a[href*='kullanici'], nav\").locator(\"text=Kullanıcı\").first\n"
+    },
+    {
+      "name": "6.2 Kullanıcı listesi görünüyor",
+      "error": ""
+    },
+    {
+      "name": "7.1 Sayımlar sayfası açıldı",
+      "error": "Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"a:has-text('Sayım'), a[href*='sayim'], nav\").locator(\"text=Sayım\").first\n"
+    },
+    {
+      "name": "8.1 Roller sayfası açıldı",
+      "error": "Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"a:has-text('Rol'), a[href*='rol'], nav\").locator(\"text=Rol\").first\n"
+    },
+    {
+      "name": "8.2 Rol listesi görünüyor",
+      "error": ""
+    },
+    {
+      "name": "9.1-9.6 API doğrulama",
+      "error": "Token bulunamadı"
+    },
+    {
+      "name": "10.1 İşletme oluştur → 201",
+      "error": ""
+    },
+    {
+      "name": "10.2 Depo oluştur → 201",
+      "error": ""
+    },
+    {
+      "name": "10.3 Ürün oluştur → 201",
+      "error": ""
+    },
+    {
+      "name": "10.4 Ürün güncelle",
+      "error": ""
+    },
+    {
+      "name": "10.5 Sayım oluştur → 201",
+      "error": ""
+    },
+    {
+      "name": "10.6 Kalem ekle → 201",
+      "error": ""
+    },
+    {
+      "name": "10.7 Sayım detay — 1 kalem",
+      "error": ""
+    },
+    {
+      "name": "10.8 Sayım tamamla",
+      "error": ""
+    },
+    {
+      "name": "10.9 Tamamlana kalem eklenemez → 400",
+      "error": ""
+    },
+    {
+      "name": "10.10 Sayım sil → 200",
+      "error": ""
+    },
+    {
+      "name": "10.11 Ürün sil → 200",
+      "error": ""
+    },
+    {
+      "name": "10.12 Depo sil → 200",
+      "error": ""
+    },
+    {
+      "name": "10.13 İşletme sil → 200",
+      "error": ""
+    }
+  ],
+  "screenshots": [
+    "/tmp/stoksay-ui-01-login-fail-1774445825.png",
+    "/tmp/stoksay-ui-03-isletmeler-1774445857.png",
+    "/tmp/stoksay-ui-04-depolar-1774445920.png",
+    "/tmp/stoksay-ui-05-urunler-1774445953.png",
+    "/tmp/stoksay-ui-06-kullanicilar-1774445985.png",
+    "/tmp/stoksay-ui-07-sayimlar-1774446018.png",
+    "/tmp/stoksay-ui-08-roller-1774446048.png",
+    "/tmp/stoksay-ui-99-final-1774446048.png"
+  ]
+}

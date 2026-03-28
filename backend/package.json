@@ -1,6 +1,6 @@
 {
   "name": "stoksay-backend",
-  "version": "1.0.0",
+  "version": "4.1.3",
   "description": "StokSay Depo Sayım Sistemi - Backend API",
   "main": "index.js",
   "scripts": {

@@ -1,0 +1,63 @@
+{
+  "backend": "http://localhost:8888",
+  "timestamp": "2026-03-25T13:19:01.061Z",
+  "summary": {
+    "passed": 83,
+    "failed": 13,
+    "total": 96
+  },
+  "errors": [
+    {
+      "name": "Ürün — Barkod ile ara",
+      "error": "Beklenen 200, gelen 404"
+    },
+    {
+      "name": "Kullanıcı — İşletme ata",
+      "error": "Beklenen 201, gelen 500"
+    },
+    {
+      "name": "Kullanıcı — Yetki güncelle",
+      "error": "Beklenen 200, gelen 500"
+    },
+    {
+      "name": "Kullanıcı — Yetki sorgula",
+      "error": "Beklenen 200, gelen 404"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı /auth/me",
+      "error": "İşletme yetkisi bekleniyor"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı kendi işletme ürünlerini listele",
+      "error": "Beklenen 200, gelen 403"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı kendi işletme depolarını listele",
+      "error": "Beklenen 200, gelen 403"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı yeni sayım oluştur",
+      "error": "Beklenen 201, gelen 403"
+    },
+    {
+      "name": "Profil — İşletmelerim",
+      "error": "En az 1 işletme bekleniyor"
+    },
+    {
+      "name": "Profil — Stats",
+      "error": "Beklenen 200, gelen 500"
+    },
+    {
+      "name": "Cleanup — Kullanıcı işletme ataması kaldır",
+      "error": "Beklenen 200, gelen 500"
+    },
+    {
+      "name": "Cleanup — Kullanıcı pasife al → login edilemez",
+      "error": "Beklenen 200, gelen 500"
+    },
+    {
+      "name": "Cleanup — Kullanıcı geri al (restore)",
+      "error": "Beklenen 200, gelen 404"
+    }
+  ]
+}

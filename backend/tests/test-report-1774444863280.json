@@ -1,0 +1,283 @@
+{
+  "backend": "http://localhost:8888",
+  "timestamp": "2026-03-25T13:21:03.279Z",
+  "summary": {
+    "passed": 28,
+    "failed": 68,
+    "total": 96
+  },
+  "errors": [
+    {
+      "name": "Auth — Login başarısız (yanlış şifre)",
+      "error": "Beklenen 401, gelen 200"
+    },
+    {
+      "name": "Auth — Login başarısız (eksik email)",
+      "error": "Beklenen 400, gelen 200"
+    },
+    {
+      "name": "Auth — Login başarısız (geçersiz email)",
+      "error": "Beklenen 400, gelen 200"
+    },
+    {
+      "name": "Auth — Admin login başarılı",
+      "error": "Token alınamadı"
+    },
+    {
+      "name": "Auth — GET /auth/me (admin)",
+      "error": "Kullanıcı bilgisi alınamadı"
+    },
+    {
+      "name": "Auth — Token olmadan erişim → 401",
+      "error": "Beklenen 401, gelen 200"
+    },
+    {
+      "name": "Auth — Geçersiz token → 401",
+      "error": "Beklenen 401/403, gelen 200"
+    },
+    {
+      "name": "İşletme — Oluştur",
+      "error": "Beklenen 201, gelen 200 — \"<br />\\n<b>Warning</b>:  Unknown: Failed to open stream: No such file or directory in <b>Unknown</b> on line <b>0</b><br />\\n<br />\\n<b>Fatal error</b>:  Failed opening required 'server.php' (include_path='.:/opt/homebrew/Cellar/php/8.5.3/share/php/pear') in <b>Unknown</b> on line <b>0</b><br />\\n\""
+    },
+    {
+      "name": "İşletme — Oluştur (2. işletme)",
+      "error": "Beklenen 201, gelen 200"
+    },
+    {
+      "name": "İşletme — Ad ve kod zorunlu",
+      "error": "Beklenen 400, gelen 200"
+    },
+    {
+      "name": "İşletme — Listele (pagination)",
+      "error": "data array bekleniyor"
+    },
+    {
+      "name": "İşletme — Listele (pagination yok — dropdown)",
+      "error": "Array bekleniyor"
+    },
+    {
+      "name": "İşletme — Detay",
+      "error": "ID eşleşmiyor"
+    },
+    {
+      "name": "İşletme — Güncelle",
+      "error": "Ad güncellenmedi"
+    },
+    {
+      "name": "İşletme — Geçersiz telefon",
+      "error": "Beklenen 400, gelen 200"
+    },
+    {
+      "name": "İşletme — 404 olmayan ID",
+      "error": "Beklenen 404, gelen 200"
+    },
+    {
+      "name": "Depo — Oluştur",
+      "error": "Beklenen 201, gelen 200 — \"<br />\\n<b>Warning</b>:  Unknown: Failed to open stream: No such file or directory in <b>Unknown</b> on line <b>0</b><br />\\n<br />\\n<b>Fatal error</b>:  Failed opening required 'server.php' (include_path='.:/opt/homebrew/Cellar/php/8.5.3/share/php/pear') in <b>Unknown</b> on line <b>0</b><br />\\n\""
+    },
+    {
+      "name": "Depo — isletme_id ve ad zorunlu",
+      "error": "Beklenen 400, gelen 200"
+    },
+    {
+      "name": "Depo — Listele (admin, pagination)",
+      "error": "data array bekleniyor"
+    },
+    {
+      "name": "Depo — Detay",
+      "error": "ID eşleşmiyor"
+    },
+    {
+      "name": "Depo — Güncelle",
+      "error": "Ad güncellenmedi"
+    },
+    {
+      "name": "Ürün — Oluştur",
+      "error": "Beklenen 201, gelen 200 — \"<br />\\n<b>Warning</b>:  Unknown: Failed to open stream: No such file or directory in <b>Unknown</b> on line <b>0</b><br />\\n<br />\\n<b>Fatal error</b>:  Failed opening required 'server.php' (include_path='.:/opt/homebrew/Cellar/php/8.5.3/share/php/pear') in <b>Unknown</b> on line <b>0</b><br />\\n\""
+    },
+    {
+      "name": "Ürün — Oluştur (2. ürün)",
+      "error": "Beklenen 201, gelen 200"
+    },
+    {
+      "name": "Ürün — isletme_id ve urun_adi zorunlu",
+      "error": "Beklenen 400, gelen 200"
+    },
+    {
+      "name": "Ürün — Listele (admin, pagination)",
+      "error": "data array bekleniyor"
+    },
+    {
+      "name": "Ürün — Arama",
+      "error": "Cannot read properties of undefined (reading 'length')"
+    },
+    {
+      "name": "Ürün — Güncelle",
+      "error": "Ad güncellenmedi"
+    },
+    {
+      "name": "Ürün — Olmayan barkod → 404",
+      "error": "Beklenen 404, gelen 200"
+    },
+    {
+      "name": "Ürün — Barkod ekle",
+      "error": "Cannot read properties of undefined (reading 'includes')"
+    },
+    {
+      "name": "Ürün — Detay",
+      "error": "ID eşleşmiyor"
+    },
+    {
+      "name": "Sayım — Oluştur",
+      "error": "Beklenen 201, gelen 200 — \"<br />\\n<b>Warning</b>:  Unknown: Failed to open stream: No such file or directory in <b>Unknown</b> on line <b>0</b><br />\\n<br />\\n<b>Fatal error</b>:  Failed opening required 'server.php' (include_path='.:/opt/homebrew/Cellar/php/8.5.3/share/php/pear') in <b>Unknown</b> on line <b>0</b><br />\\n\""
+    },
+    {
+      "name": "Sayım — Oluştur (2. sayım — birleştirme için)",
+      "error": "Beklenen 201, gelen 200"
+    },
+    {
+      "name": "Sayım — Listele (admin, pagination)",
+      "error": "data array bekleniyor"
+    },
+    {
+      "name": "Sayım — Detay",
+      "error": "ID eşleşmiyor"
+    },
+    {
+      "name": "Sayım — Kalem ekle",
+      "error": "Beklenen 201, gelen 200 — \"<br />\\n<b>Warning</b>:  Unknown: Failed to open stream: No such file or directory in <b>Unknown</b> on line <b>0</b><br />\\n<br />\\n<b>Fatal error</b>:  Failed opening required 'server.php' (include_path='.:/opt/homebrew/Cellar/php/8.5.3/share/php/pear') in <b>Unknown</b> on line <b>0</b><br />\\n\""
+    },
+    {
+      "name": "Sayım — Kalem ekle (2. ürün)",
+      "error": "Beklenen 201, gelen 200"
+    },
+    {
+      "name": "Sayım — 2. sayıma kalem ekle",
+      "error": "Beklenen 201, gelen 200"
+    },
+    {
+      "name": "Sayım — Detay (kalemli)",
+      "error": "Cannot read properties of undefined (reading 'length')"
+    },
+    {
+      "name": "Sayım — Tamamlanan sayımda kalem eklenemez",
+      "error": "Beklenen hata, gelen 200"
+    },
+    {
+      "name": "Sayım — 404 olmayan ID",
+      "error": "Beklenen 404, gelen 200"
+    },
+    {
+      "name": "Kullanıcı — Oluştur",
+      "error": "Beklenen 201, gelen 200 — \"<br />\\n<b>Warning</b>:  Unknown: Failed to open stream: No such file or directory in <b>Unknown</b> on line <b>0</b><br />\\n<br />\\n<b>Fatal error</b>:  Failed opening required 'server.php' (include_path='.:/opt/homebrew/Cellar/php/8.5.3/share/php/pear') in <b>Unknown</b> on line <b>0</b><br />\\n\""
+    },
+    {
+      "name": "Kullanıcı — Eksik alanlar → 400",
+      "error": "Beklenen 400, gelen 200"
+    },
+    {
+      "name": "Kullanıcı — Kısa şifre → 400",
+      "error": "Beklenen 400, gelen 200"
+    },
+    {
+      "name": "Kullanıcı — Duplicate email → 409",
+      "error": "Beklenen 409, gelen 200"
+    },
+    {
+      "name": "Kullanıcı — Listele",
+      "error": "data array bekleniyor"
+    },
+    {
+      "name": "Kullanıcı — Detay",
+      "error": "ID eşleşmiyor"
+    },
+    {
+      "name": "Kullanıcı — Güncelle",
+      "error": "Ad güncellenmedi"
+    },
+    {
+      "name": "Kullanıcı — İşletme ata",
+      "error": "Beklenen 201, gelen 200"
+    },
+    {
+      "name": "Kullanıcı — Yetki güncelle",
+      "error": "Yetkiler döndürülmedi"
+    },
+    {
+      "name": "Kullanıcı — Yetki sorgula",
+      "error": "Yetkiler alınamadı"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı login",
+      "error": "Token alınamadı"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı /auth/me",
+      "error": "yetkilerMap bekleniyor"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı admin endpoint → 403",
+      "error": "Beklenen 403, gelen 200"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı yeni sayım oluştur",
+      "error": "Beklenen 201, gelen 200"
+    },
+    {
+      "name": "Kullanıcı — Normal kullanıcı yetkisiz işletme → 403",
+      "error": "Beklenen 403, gelen 200"
+    },
+    {
+      "name": "Rol — Listele",
+      "error": "Array bekleniyor"
+    },
+    {
+      "name": "Rol — Oluştur",
+      "error": "Beklenen 201, gelen 200"
+    },
+    {
+      "name": "Rol — Ad zorunlu",
+      "error": "Beklenen 400, gelen 200"
+    },
+    {
+      "name": "Rol — Atanmışlar",
+      "error": "Array bekleniyor"
+    },
+    {
+      "name": "Profil — İşletmelerim",
+      "error": "Array bekleniyor"
+    },
+    {
+      "name": "Profil — Stats",
+      "error": "sayimlar sayı olmalı"
+    },
+    {
+      "name": "Profil — Ayarlar güncelle",
+      "error": "ok=true bekleniyor"
+    },
+    {
+      "name": "Stats — Dashboard",
+      "error": "isletme sayısı bekleniyor"
+    },
+    {
+      "name": "Stats — Sayım trend",
+      "error": "Array bekleniyor"
+    },
+    {
+      "name": "Stats — İşletme sayımları",
+      "error": "Array bekleniyor"
+    },
+    {
+      "name": "Stats — Son sayımlar",
+      "error": "Array bekleniyor"
+    },
+    {
+      "name": "Auth — Şifre güncelle (yanlış eski şifre) → 401",
+      "error": "Beklenen 401, gelen 200"
+    },
+    {
+      "name": "Auth — Şifre güncelle (kısa yeni şifre) → 400",
+      "error": "Beklenen 400, gelen 200"
+    }
+  ]
+}

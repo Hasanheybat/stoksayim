@@ -1,0 +1,11 @@
+{
+  "type": "mobile-api-compat",
+  "backend": "http://localhost:8888",
+  "timestamp": "2026-03-25T13:21:40.123Z",
+  "summary": {
+    "passed": 27,
+    "failed": 0,
+    "total": 27
+  },
+  "errors": []
+}

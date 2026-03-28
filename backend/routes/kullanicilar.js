@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const { pool } = require('../lib/db');
 const authGuard = require('../middleware/authGuard');
 const adminGuard = require('../middleware/adminGuard');
+const { msg, messages } = require('../lib/messages');
 
 router.use(authGuard, adminGuard);
 
@@ -109,7 +110,7 @@ router.get('/', async (req, res) => {
     res.json(list);
   } catch (err) {
     console.error('[kullanicilar]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -122,7 +123,7 @@ router.get('/:id', async (req, res) => {
     );
 
     if (!userRows.length) {
-      return res.status(404).json({ hata: 'Kullanıcı bulunamadı.' });
+      return res.status(404).json({ hata: msg(req.lang, 'USER_NOT_FOUND') });
     }
 
     const kullanici = userRows[0];
@@ -146,7 +147,7 @@ router.get('/:id', async (req, res) => {
     res.json(kullanici);
   } catch (err) {
     console.error('[kullanicilar]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -155,22 +156,22 @@ router.post('/', async (req, res) => {
   const { ad_soyad, email, sifre, rol, telefon } = req.body;
 
   if (!ad_soyad || !email || !sifre) {
-    return res.status(400).json({ hata: 'ad_soyad, email ve sifre zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'USER_FIELDS_REQUIRED') });
   }
-  if (ad_soyad.length > 100) return res.status(400).json({ hata: 'Ad soyad en fazla 100 karakter olabilir.' });
-  if (email.length > 255) return res.status(400).json({ hata: 'Email en fazla 255 karakter olabilir.' });
+  if (ad_soyad.length > 100) return res.status(400).json({ hata: msg(req.lang, 'NAME_MAX_LENGTH') });
+  if (email.length > 255) return res.status(400).json({ hata: msg(req.lang, 'EMAIL_MAX_LENGTH') });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ hata: 'Geçerli bir email adresi giriniz.' });
+    return res.status(400).json({ hata: msg(req.lang, 'INVALID_EMAIL') });
   }
   if (sifre.length < 8) {
-    return res.status(400).json({ hata: 'Şifre en az 8 karakter olmalıdır.' });
+    return res.status(400).json({ hata: msg(req.lang, 'PASSWORD_MIN_LENGTH') });
   }
-  if (sifre.length > 128) return res.status(400).json({ hata: 'Şifre en fazla 128 karakter olabilir.' });
+  if (sifre.length > 128) return res.status(400).json({ hata: msg(req.lang, 'PASSWORD_MAX_LENGTH') });
   if (rol && !['admin', 'kullanici'].includes(rol)) {
-    return res.status(400).json({ hata: 'Geçersiz rol. admin veya kullanici olmalı.' });
+    return res.status(400).json({ hata: msg(req.lang, 'INVALID_ROLE') });
   }
   if (telefon && !/^[0-9+\-\s()]{7,20}$/.test(telefon)) {
-    return res.status(400).json({ hata: 'Geçerli bir telefon numarası giriniz.' });
+    return res.status(400).json({ hata: msg(req.lang, 'INVALID_PHONE') });
   }
 
   try {
@@ -190,10 +191,10 @@ router.post('/', async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     if (err.errno === 1062) {
-      return res.status(409).json({ hata: 'Bu email zaten kullanımda.' });
+      return res.status(409).json({ hata: msg(req.lang, 'EMAIL_ALREADY_IN_USE') });
     }
     console.error('[kullanicilar]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -204,10 +205,10 @@ router.put('/:id', async (req, res) => {
   // Adminler kendi rollerini düşüremez ve kendilerini pasife alamaz
   if (req.params.id === req.user.id) {
     if (rol !== undefined && rol !== 'admin') {
-      return res.status(403).json({ hata: 'Kendi admin rolünüzü değiştiremezsiniz.' });
+      return res.status(403).json({ hata: msg(req.lang, 'CANNOT_CHANGE_OWN_ADMIN_ROLE') });
     }
     if (aktif === false) {
-      return res.status(403).json({ hata: 'Kendi hesabınızı pasife alamazsınız.' });
+      return res.status(403).json({ hata: msg(req.lang, 'CANNOT_DEACTIVATE_SELF') });
     }
   }
 
@@ -228,7 +229,7 @@ router.put('/:id', async (req, res) => {
     }
 
     if (!fields.length) {
-      return res.status(400).json({ hata: 'Güncellenecek alan yok.' });
+      return res.status(400).json({ hata: msg(req.lang, 'NO_FIELDS_TO_UPDATE') });
     }
 
     params.push(req.params.id);
@@ -244,23 +245,23 @@ router.put('/:id', async (req, res) => {
     );
 
     if (!rows.length) {
-      return res.status(404).json({ hata: 'Kullanıcı bulunamadı.' });
+      return res.status(404).json({ hata: msg(req.lang, 'USER_NOT_FOUND') });
     }
 
     res.json(rows[0]);
   } catch (err) {
     if (err.errno === 1062) {
-      return res.status(409).json({ hata: 'Bu email zaten kullanımda.' });
+      return res.status(409).json({ hata: msg(req.lang, 'EMAIL_ALREADY_IN_USE') });
     }
     console.error('[kullanicilar]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
 // DELETE /api/kullanicilar/:id — Pasife al
 router.delete('/:id', async (req, res) => {
   if (req.params.id === req.user.id) {
-    return res.status(403).json({ hata: 'Kendi hesabınızı silemezsiniz.' });
+    return res.status(403).json({ hata: msg(req.lang, 'CANNOT_DELETE_SELF') });
   }
 
   try {
@@ -269,10 +270,10 @@ router.delete('/:id', async (req, res) => {
       [req.params.id]
     );
 
-    res.json({ mesaj: 'Kullanıcı pasife alındı.' });
+    res.json({ mesaj: msg(req.lang, 'USER_DEACTIVATED') });
   } catch (err) {
     console.error('[kullanicilar]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -281,7 +282,7 @@ router.post('/:id/isletme', async (req, res) => {
   const { isletme_id } = req.body;
 
   if (!isletme_id) {
-    return res.status(400).json({ hata: 'isletme_id zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_ID_REQUIRED') });
   }
 
   const varsayilanYetkiler = {
@@ -310,7 +311,7 @@ router.post('/:id/isletme', async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('[kullanicilar]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -322,10 +323,10 @@ router.delete('/:id/isletme/:isletme_id', async (req, res) => {
       [req.params.id, req.params.isletme_id]
     );
 
-    res.json({ mesaj: 'İşletme ataması kaldırıldı.' });
+    res.json({ mesaj: msg(req.lang, 'BUSINESS_ASSIGNMENT_REMOVED') });
   } catch (err) {
     console.error('[kullanicilar]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -334,7 +335,7 @@ router.get('/:id/yetkiler', async (req, res) => {
   const { isletme_id } = req.query;
 
   if (!isletme_id) {
-    return res.status(400).json({ hata: 'isletme_id zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_ID_REQUIRED') });
   }
 
   try {
@@ -347,7 +348,7 @@ router.get('/:id/yetkiler', async (req, res) => {
     );
 
     if (!rows.length) {
-      return res.status(404).json({ hata: 'Atama bulunamadı.' });
+      return res.status(404).json({ hata: msg(req.lang, 'ASSIGNMENT_NOT_FOUND') });
     }
 
     res.json({
@@ -357,7 +358,7 @@ router.get('/:id/yetkiler', async (req, res) => {
     });
   } catch (err) {
     console.error('[kullanicilar]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -366,7 +367,7 @@ router.put('/:id/yetkiler', async (req, res) => {
   const { isletme_id, yetkiler, rol_id } = req.body;
 
   if (!isletme_id || !yetkiler) {
-    return res.status(400).json({ hata: 'isletme_id ve yetkiler zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'BUSINESS_ID_AND_PERMISSIONS_REQUIRED') });
   }
 
   try {
@@ -411,13 +412,13 @@ router.put('/:id/yetkiler', async (req, res) => {
     );
 
     if (!rows.length) {
-      return res.status(404).json({ hata: 'Atama bulunamadı.' });
+      return res.status(404).json({ hata: msg(req.lang, 'ASSIGNMENT_NOT_FOUND') });
     }
 
     res.json(rows[0]);
   } catch (err) {
     console.error('[kullanicilar]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -425,13 +426,13 @@ router.put('/:id/yetkiler', async (req, res) => {
 router.put('/:id/restore', async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT id, aktif FROM kullanicilar WHERE id = ?', [req.params.id]);
-    if (!rows.length) return res.status(404).json({ hata: 'Kullanıcı bulunamadı.' });
-    if (rows[0].aktif === 1) return res.status(400).json({ hata: 'Bu kullanıcı zaten aktif.' });
+    if (!rows.length) return res.status(404).json({ hata: msg(req.lang, 'USER_NOT_FOUND') });
+    if (rows[0].aktif === 1) return res.status(400).json({ hata: msg(req.lang, 'USER_ALREADY_ACTIVE') });
     await pool.execute('UPDATE kullanicilar SET aktif = 1 WHERE id = ?', [req.params.id]);
-    res.json({ mesaj: 'Kullanıcı geri alındı.' });
+    res.json({ mesaj: msg(req.lang, 'USER_RESTORED') });
   } catch (err) {
     console.error('[kullanicilar]', err.message);
-    return res.status(500).json({ hata: 'Sunucu hatası.' });
+    return res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 

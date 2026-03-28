@@ -1,0 +1,55 @@
+{
+  "backend": "http://localhost:8888",
+  "summary": {
+    "passed": 0,
+    "failed": 11,
+    "total": 11,
+    "ms": 71416
+  },
+  "errors": [
+    {
+      "name": "1.1 Login formu dolduruldu",
+      "error": "Page.fill: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"input[type='email']\")\n"
+    },
+    {
+      "name": "1.2 Admin login başarılı",
+      "error": "Page.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"button[type='submit']\")\n"
+    },
+    {
+      "name": "2.1 Dashboard verileri görünüyor",
+      "error": ""
+    },
+    {
+      "name": "3. İşletmeler sayfası yüklendi",
+      "error": ""
+    },
+    {
+      "name": "3. Depolar sayfası yüklendi",
+      "error": ""
+    },
+    {
+      "name": "3. Kullanıcılar sayfası yüklendi",
+      "error": ""
+    },
+    {
+      "name": "3. Ürünler sayfası yüklendi",
+      "error": ""
+    },
+    {
+      "name": "3. Roller sayfası yüklendi",
+      "error": ""
+    },
+    {
+      "name": "3. Sayımlar sayfası yüklendi",
+      "error": ""
+    },
+    {
+      "name": "4.x API doğrulama",
+      "error": "{'error': 'Token yok'}"
+    },
+    {
+      "name": "5.x CRUD",
+      "error": "Page.evaluate: TypeError: Failed to fetch\n    at eval (eval at evaluate (:291:30), <anonymous>:8:31)\n    at UtilityScript.evaluate (<anonymous>:298:18)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+    }
+  ]
+}

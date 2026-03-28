@@ -1,0 +1,19 @@
+{
+  "backend": "http://localhost:8888",
+  "timestamp": "2026-03-25T13:21:47.081Z",
+  "summary": {
+    "passed": 94,
+    "failed": 2,
+    "total": 96
+  },
+  "errors": [
+    {
+      "name": "Ürün — Barkod ile ara",
+      "error": "Beklenen 200, gelen 404"
+    },
+    {
+      "name": "Cleanup — Ürün aktif sayımda sil → 409",
+      "error": "Beklenen 409 (aktif sayımda), gelen 200"
+    }
+  ]
+}

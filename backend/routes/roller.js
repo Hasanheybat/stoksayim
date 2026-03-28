@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { pool } = require('../lib/db');
 const authGuard  = require('../middleware/authGuard');
 const adminGuard = require('../middleware/adminGuard');
+const { msg, messages } = require('../lib/messages');
 
 // Tüm roller rotaları: auth + admin gerektirir
 router.use(authGuard, adminGuard);
@@ -17,7 +18,7 @@ router.get('/', async (req, res) => {
     res.json(rows || []);
   } catch (err) {
     console.error('[roller]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -26,7 +27,7 @@ router.post('/', async (req, res) => {
   const { ad, yetkiler } = req.body;
 
   if (!ad?.trim()) {
-    return res.status(400).json({ hata: 'Rol adı zorunludur.' });
+    return res.status(400).json({ hata: msg(req.lang, 'ROLE_NAME_REQUIRED') });
   }
 
   const varsayilanYetkiler = {
@@ -52,10 +53,10 @@ router.post('/', async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     if (err.errno === 1062) {
-      return res.status(409).json({ hata: 'Bu rol adı zaten mevcut.' });
+      return res.status(409).json({ hata: msg(req.lang, 'ROLE_NAME_EXISTS') });
     }
     console.error('[roller]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -68,7 +69,7 @@ router.put('/:id', async (req, res) => {
   if (yetkiler !== undefined) guncelle.yetkiler = yetkiler;
 
   if (Object.keys(guncelle).length === 0) {
-    return res.status(400).json({ hata: 'Güncellenecek alan yok.' });
+    return res.status(400).json({ hata: msg(req.lang, 'NO_FIELDS_TO_UPDATE') });
   }
 
   try {
@@ -112,16 +113,16 @@ router.put('/:id', async (req, res) => {
     );
 
     if (!rows.length) {
-      return res.status(404).json({ hata: 'Rol bulunamadı.' });
+      return res.status(404).json({ hata: msg(req.lang, 'ROLE_NOT_FOUND') });
     }
 
     res.json(rows[0]);
   } catch (err) {
     if (err.errno === 1062) {
-      return res.status(409).json({ hata: 'Bu rol adı zaten mevcut.' });
+      return res.status(409).json({ hata: msg(req.lang, 'ROLE_NAME_EXISTS') });
     }
     console.error('[roller]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -139,7 +140,7 @@ router.get('/:id/atanmislar', async (req, res) => {
     res.json(rows || []);
   } catch (err) {
     console.error('[roller]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 
@@ -154,11 +155,11 @@ router.delete('/:id', async (req, res) => {
     );
 
     if (!rolRows.length) {
-      return res.status(404).json({ hata: 'Rol bulunamadı.' });
+      return res.status(404).json({ hata: msg(req.lang, 'ROLE_NOT_FOUND') });
     }
 
     if (rolRows[0].sistem) {
-      return res.status(403).json({ hata: `"${rolRows[0].ad}" sistem rolü silinemez.` });
+      return res.status(403).json({ hata: messages._SYSTEM_ROLE_NO_DELETE(req.lang, rolRows[0].ad) });
     }
 
     const atamalar = req.body?.atamalar || [];
@@ -204,10 +205,10 @@ router.delete('/:id', async (req, res) => {
       conn.release();
     }
 
-    res.json({ mesaj: 'Rol silindi.' });
+    res.json({ mesaj: msg(req.lang, 'ROLE_DELETED') });
   } catch (err) {
     console.error('[roller]', err.message);
-    res.status(500).json({ hata: 'Sunucu hatası.' });
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
   }
 });
 

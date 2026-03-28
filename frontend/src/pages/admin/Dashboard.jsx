@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/apiAdm';
 import useAuthStoreAdm from '../../store/authStoreAdm';
+import { useLanguage } from '../../i18n';
 
 /* ── Renkler ── */
 const GRAD = {
@@ -69,6 +70,7 @@ function Skel({ h = 'h-20', cls = '' }) {
 }
 
 export default function AdminDashboard() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { kullanici } = useAuthStoreAdm();
 
@@ -126,14 +128,14 @@ export default function AdminDashboard() {
   const maxSayim = Math.max(...isletmeSayim.map(i => i.toplam), 1);
 
   const navLinks = [
-    { icon: Building2,    grad: GRAD.indigo, label: 'İşletmeler',   to: '/admin/isletmeler',   count: stats?.isletme   },
-    { icon: Warehouse,    grad: GRAD.blue,   label: 'Depolar',      to: '/admin/depolar',       count: stats?.depo      },
-    { icon: Users,        grad: GRAD.green,  label: 'Kullanıcılar', to: '/admin/kullanicilar',  count: stats?.kullanici },
-    { icon: Package,      grad: GRAD.amber,  label: 'Ürünler',      to: '/admin/urunler',       count: stats?.urun      },
-    { icon: ShieldCheck,  grad: GRAD.pink,   label: 'Roller',       to: '/admin/roller'                                 },
-    { icon: ClipboardList,grad: GRAD.teal,   label: 'Sayımlar',     to: '/admin/sayimlar',      count: stats?.sayim     },
-    { icon: Calculator,   grad: GRAD.purple, label: 'Toplam Sayımlar', to: '/admin/toplanmis-sayimlar'                    },
-    { icon: Settings,     grad: GRAD.gray,   label: 'Ayarlar',      to: '/admin/ayarlar'                                },
+    { icon: Building2,    grad: GRAD.indigo, label: t('nav.businesses'),   to: '/admin/isletmeler',   count: stats?.isletme   },
+    { icon: Warehouse,    grad: GRAD.blue,   label: t('nav.warehouses'),      to: '/admin/depolar',       count: stats?.depo      },
+    { icon: Users,        grad: GRAD.green,  label: t('nav.users'), to: '/admin/kullanicilar',  count: stats?.kullanici },
+    { icon: Package,      grad: GRAD.amber,  label: t('nav.products'),      to: '/admin/urunler',       count: stats?.urun      },
+    { icon: ShieldCheck,  grad: GRAD.pink,   label: t('nav.roles'),       to: '/admin/roller'                                 },
+    { icon: ClipboardList,grad: GRAD.teal,   label: t('nav.counts'),     to: '/admin/sayimlar',      count: stats?.sayim     },
+    { icon: Calculator,   grad: GRAD.purple, label: t('nav.mergedCounts'), to: '/admin/toplanmis-sayimlar'                    },
+    { icon: Settings,     grad: GRAD.gray,   label: t('nav.settings'),      to: '/admin/ayarlar'                                },
   ];
 
   return (
@@ -165,7 +167,7 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
             <ClipboardList className="w-4 h-4 text-indigo-400" />
-            Sayım Durumu
+            {t('dashboard.countStatus')}
           </h2>
           {loading
             ? <Skel h="h-44" />
@@ -173,7 +175,7 @@ export default function AdminDashboard() {
             ? (
               <div className="flex flex-col items-center justify-center h-44 text-gray-200 gap-2">
                 <ClipboardList className="w-10 h-10" />
-                <span className="text-sm text-gray-300">Henüz sayım yok</span>
+                <span className="text-sm text-gray-300">{t('dashboard.noCountYet')}</span>
               </div>
             ) : (
               <div className="flex items-center gap-5">
@@ -182,14 +184,14 @@ export default function AdminDashboard() {
                   <DonutChart segments={donutSegments} total={toplam} />
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                     <span className="text-2xl font-black text-gray-900">{toplam}</span>
-                    <span className="text-[10px] text-gray-400 font-medium">Toplam</span>
+                    <span className="text-[10px] text-gray-400 font-medium">{t('stat.total')}</span>
                   </div>
                 </div>
                 {/* Detay kartları */}
                 <div className="flex-1 space-y-2.5">
                   {[
-                    { icon: CheckCircle2, label: 'Tamamlandı',   value: tamamlandi, color: '#10B981', bg: '#F0FDF4' },
-                    { icon: Clock,        label: 'Devam Ediyor', value: devam,      color: '#3B82F6', bg: '#EFF6FF' },
+                    { icon: CheckCircle2, label: t('status.completed'),   value: tamamlandi, color: '#10B981', bg: '#F0FDF4' },
+                    { icon: Clock,        label: t('status.ongoing'), value: devam,      color: '#3B82F6', bg: '#EFF6FF' },
                   ].map((r, i) => (
                     <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl" style={{ background: r.bg }}>
                       <r.icon className="w-4 h-4 flex-shrink-0" style={{ color: r.color }} />
@@ -210,7 +212,7 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
             <Building2 className="w-4 h-4 text-indigo-400" />
-            İşletme Bazlı Sayım
+            {t('dashboard.countByBusiness')}
           </h2>
           {loading
             ? <Skel h="h-44" />
@@ -218,7 +220,7 @@ export default function AdminDashboard() {
             ? (
               <div className="flex flex-col items-center justify-center h-44 text-gray-200 gap-2">
                 <Building2 className="w-10 h-10" />
-                <span className="text-sm text-gray-300">Veri yok</span>
+                <span className="text-sm text-gray-300">{t('dashboard.noData')}</span>
               </div>
             ) : (
               <div className="space-y-3.5">
@@ -245,11 +247,11 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-4 pt-1">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" />
-                    <span className="text-[11px] text-gray-400">Tamamlandı</span>
+                    <span className="text-[11px] text-gray-400">{t('status.completed')}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" />
-                    <span className="text-[11px] text-gray-400">Devam Ediyor</span>
+                    <span className="text-[11px] text-gray-400">{t('status.ongoing')}</span>
                   </div>
                 </div>
               </div>
@@ -264,18 +266,18 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-indigo-400" />
-              Son Sayımlar
+              {t('dashboard.recentCounts')}
             </h2>
             <button onClick={() => navigate('/admin/sayimlar')}
               className="text-xs text-indigo-500 hover:text-indigo-700 font-semibold flex items-center gap-1">
-              Tümünü Gör <ChevronRight className="w-3.5 h-3.5" />
+              {t('dashboard.viewAll')} <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
           <div className="space-y-1.5">
             {sonSayimlar.map(s => {
               const d = s.durum === 'tamamlandi'
-                ? { bg: '#F0FDF4', color: '#15803D', dot: '#22C55E', label: 'Tamamlandı' }
-                : { bg: '#EFF6FF', color: '#2563EB', dot: '#3B82F6', label: 'Devam Ediyor' };
+                ? { bg: '#F0FDF4', color: '#15803D', dot: '#22C55E', label: t('status.completed') }
+                : { bg: '#EFF6FF', color: '#2563EB', dot: '#3B82F6', label: t('status.ongoing') };
               return (
                 <div key={s.id}
                   onClick={() => navigate('/admin/sayimlar')}
@@ -309,7 +311,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      <p className="text-center text-xs text-gray-200 pb-1">StokSay v2.0.0</p>
+      <p className="text-center text-xs text-gray-200 pb-1">{t('app.footer')}</p>
     </div>
   );
 }

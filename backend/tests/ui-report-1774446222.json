@@ -1,0 +1,103 @@
+{
+  "backend": "http://localhost:8888",
+  "summary": {
+    "passed": 2,
+    "failed": 23,
+    "total": 25,
+    "ms": 71613
+  },
+  "errors": [
+    {
+      "name": "1.1 Login formu dolduruldu",
+      "error": "Page.fill: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"input[type='email']\")\n"
+    },
+    {
+      "name": "1.2 Admin login başarılı",
+      "error": "Page.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"button[type='submit']\")\n"
+    },
+    {
+      "name": "3. İşletmeler sayfası yüklendi",
+      "error": ""
+    },
+    {
+      "name": "3. Depolar sayfası yüklendi",
+      "error": ""
+    },
+    {
+      "name": "3. Kullanıcılar sayfası yüklendi",
+      "error": ""
+    },
+    {
+      "name": "3. Ürünler sayfası yüklendi",
+      "error": ""
+    },
+    {
+      "name": "3. Roller sayfası yüklendi",
+      "error": ""
+    },
+    {
+      "name": "3. Sayımlar sayfası yüklendi",
+      "error": ""
+    },
+    {
+      "name": "4.x API doğrulama",
+      "error": "{'error': 'Token yok'}"
+    },
+    {
+      "name": "5.01 İşletme oluştur → 201",
+      "error": ""
+    },
+    {
+      "name": "5.02 Depo oluştur → 201",
+      "error": ""
+    },
+    {
+      "name": "5.03 Ürün oluştur → 201",
+      "error": ""
+    },
+    {
+      "name": "5.04 Ürün güncelle",
+      "error": ""
+    },
+    {
+      "name": "5.05 Barkod ekle → 200",
+      "error": ""
+    },
+    {
+      "name": "5.06 Barkod ara → 200",
+      "error": ""
+    },
+    {
+      "name": "5.07 Sayım oluştur → 201",
+      "error": ""
+    },
+    {
+      "name": "5.08 Kalem ekle → 201",
+      "error": ""
+    },
+    {
+      "name": "5.09 Kalem güncelle → 200",
+      "error": ""
+    },
+    {
+      "name": "5.10 Sayım detay — 1 kalem",
+      "error": ""
+    },
+    {
+      "name": "5.11 Kalem sil → 200",
+      "error": ""
+    },
+    {
+      "name": "5.12 Sayım tamamla",
+      "error": ""
+    },
+    {
+      "name": "5.13 Tamamlana kalem eklenemez → 400",
+      "error": ""
+    },
+    {
+      "name": "5.14 Sayım birleştir (topla)",
+      "error": ""
+    }
+  ]
+}

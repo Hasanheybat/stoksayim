@@ -1,11 +1,12 @@
 const jwt = require('jsonwebtoken');
 const { pool } = require('../lib/db');
+const { msg, messages } = require('../lib/messages');
 
 module.exports = async function authGuard(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ hata: 'Oturum açılmamış.' });
+    return res.status(401).json({ hata: msg(req.lang, 'SESSION_NOT_FOUND') });
   }
 
   const token = authHeader.split(' ')[1];
@@ -19,18 +20,18 @@ module.exports = async function authGuard(req, res, next) {
     );
 
     if (!rows.length) {
-      return res.status(401).json({ hata: 'Kullanıcı bulunamadı.' });
+      return res.status(401).json({ hata: msg(req.lang, 'USER_NOT_FOUND') });
     }
 
     const kullanici = rows[0];
 
     if (!kullanici.aktif) {
-      return res.status(403).json({ hata: 'Hesabınız pasif durumdadır.' });
+      return res.status(403).json({ hata: msg(req.lang, 'ACCOUNT_INACTIVE') });
     }
 
     req.user = kullanici;
     next();
   } catch (err) {
-    return res.status(401).json({ hata: 'Geçersiz veya süresi dolmuş oturum.' });
+    return res.status(401).json({ hata: msg(req.lang, 'SESSION_INVALID') });
   }
 };

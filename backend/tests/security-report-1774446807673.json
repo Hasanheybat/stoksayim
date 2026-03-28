@@ -1,0 +1,159 @@
+{
+  "backend": "http://localhost:3001",
+  "summary": {
+    "passed": 11,
+    "failed": 37,
+    "total": 48,
+    "ms": 67
+  },
+  "errors": [
+    {
+      "name": "SETUP — Admin login",
+      "error": "Status 0"
+    },
+    {
+      "name": "SQL-01 Login email SQL injection",
+      "error": "Beklenen 400/401, gelen 0"
+    },
+    {
+      "name": "SQL-02 Login password SQL injection",
+      "error": "Beklenen 401, gelen 0"
+    },
+    {
+      "name": "SQL-04 URL param SQL injection (id)",
+      "error": "Beklenen hata, gelen 0"
+    },
+    {
+      "name": "SQL-07 Barkod arama SQL injection",
+      "error": "Beklenen 404/400, gelen 0"
+    },
+    {
+      "name": "XSS-03 Sayım notlarına script",
+      "error": "Cannot read properties of null (reading 'id')"
+    },
+    {
+      "name": "AUTH-01 Token olmadan erişim",
+      "error": "Beklenen 401, gelen 0"
+    },
+    {
+      "name": "AUTH-02 Geçersiz token formatı",
+      "error": "Beklenen 401/403, gelen 0"
+    },
+    {
+      "name": "AUTH-03 Expire olmuş token (sahte)",
+      "error": "Beklenen 401/403, gelen 0"
+    },
+    {
+      "name": "AUTH-04 Farklı secret ile imzalanmış token",
+      "error": "Beklenen 401/403, gelen 0"
+    },
+    {
+      "name": "AUTH-05 Bearer prefix olmadan token",
+      "error": "Beklenen 401, gelen 0"
+    },
+    {
+      "name": "AUTH-06 Boş Authorization header",
+      "error": "Beklenen 401, gelen 0"
+    },
+    {
+      "name": "AUTH-07 Bearer + boşluk (token yok)",
+      "error": "Beklenen 401/403, gelen 0"
+    },
+    {
+      "name": "IDOR-01 Kullanıcı başka kullanıcının sayımını görme",
+      "error": "Cannot read properties of null (reading 'id')"
+    },
+    {
+      "name": "IDOR-02 Kullanıcı admin endpoint erişimi",
+      "error": "Beklenen 403, gelen 0"
+    },
+    {
+      "name": "IDOR-03 Kullanıcı başka kullanıcı bilgisi",
+      "error": "Beklenen 403, gelen 0"
+    },
+    {
+      "name": "IDOR-04 Kullanıcı yetkisiz işletme ürünleri",
+      "error": "Cannot read properties of null (reading 'data')"
+    },
+    {
+      "name": "PRIV-01 Kullanıcı kendi rolünü admin yapamaz",
+      "error": "Beklenen 403, gelen 0"
+    },
+    {
+      "name": "PRIV-02 Kullanıcı başka kullanıcı oluşturamaz",
+      "error": "Beklenen 403, gelen 0"
+    },
+    {
+      "name": "PRIV-03 Kullanıcı rol oluşturamaz",
+      "error": "Beklenen 403, gelen 0"
+    },
+    {
+      "name": "PRIV-05 Kullanıcı stats endpoint (admin only)",
+      "error": "Beklenen 403, gelen 0"
+    },
+    {
+      "name": "INPUT-01 Çok uzun email (1000 karakter)",
+      "error": "Beklenen 400/401, gelen 0"
+    },
+    {
+      "name": "INPUT-02 Çok uzun şifre (10000 karakter)",
+      "error": "Beklenen 400/401, gelen 0"
+    },
+    {
+      "name": "INPUT-04 Boş JSON body",
+      "error": "Beklenen 400, gelen 0"
+    },
+    {
+      "name": "INPUT-06 Sayfa parametresi negatif/sıfır",
+      "error": "Status 0"
+    },
+    {
+      "name": "INPUT-07 Limit 999999 (aşırı büyük)",
+      "error": "Status 0"
+    },
+    {
+      "name": "HDR-01 X-Content-Type-Options: nosniff",
+      "error": "Header: undefined"
+    },
+    {
+      "name": "HDR-02 X-Frame-Options",
+      "error": "Header eksik: {}"
+    },
+    {
+      "name": "BIZ-01 Pasif kullanıcı login",
+      "error": "Pasif kullanıcı login: beklenen 403, gelen 0"
+    },
+    {
+      "name": "BIZ-02 Tamamlanmış sayıma kalem eklenemez",
+      "error": "Beklenen 400, gelen 0"
+    },
+    {
+      "name": "BIZ-03 Duplicate barkod",
+      "error": "Duplicate barkod: beklenen 409, gelen 0"
+    },
+    {
+      "name": "BIZ-04 Admin kendini silemez",
+      "error": "Cannot read properties of null (reading 'kullanici')"
+    },
+    {
+      "name": "BIZ-05 Duplicate email",
+      "error": "Duplicate email: beklenen 409, gelen 0"
+    },
+    {
+      "name": "RACE-01 Aynı barkodu aynı anda 2 ürüne ekleme",
+      "error": "Race condition: 0,0"
+    },
+    {
+      "name": "METHOD-01 PATCH yöntemi (desteklenmiyor)",
+      "error": "fetch failed"
+    },
+    {
+      "name": "PATH-01 Path traversal denemesi",
+      "error": "Path traversal engellenmeli"
+    },
+    {
+      "name": "PATH-02 Null byte injection",
+      "error": "Status 0"
+    }
+  ]
+}
