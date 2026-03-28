@@ -238,7 +238,7 @@ function DetayModal({ sayimId, sayimObj, onClose }) {
             <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full mt-0.5"
               style={{ background: '#EEF2FF', color: '#6366F1' }}>
               <Calculator className="w-3 h-3" />
-              Toplanmış Sayım
+              {t('nav.mergedCounts')}
             </span>
           </div>
         </div>
@@ -255,7 +255,7 @@ function DetayModal({ sayimId, sayimObj, onClose }) {
                 { label: t('nav.businesses'),   value: sayim.isletmeler?.ad },
                 { label: t('table.date'),     value: formatTarih(sayim.tarih) },
                 { label: t('nav.users'), value: sayim.kullanicilar?.ad_soyad },
-                { label: 'Toplanan',  value: `${kaynaklar.length} sayım birleştirildi` },
+                { label: t('totalCounts.merged'),  value: t('totalCounts.mergedInfo', { n: kaynaklar.length }) },
               ].filter(r => r.value).map(r => (
                 <div key={r.label} className="flex items-center justify-between gap-4">
                   <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{r.label}</span>
@@ -269,7 +269,7 @@ function DetayModal({ sayimId, sayimObj, onClose }) {
               <div className="px-5 py-3 flex items-center gap-2 border-b border-gray-100">
                 <Package className="w-4 h-4 text-gray-400" />
                 <span className="text-sm text-gray-500">
-                  <span className="font-bold text-gray-900">{kalemler.length}</span> kalem
+                  <span className="font-bold text-gray-900">{kalemler.length}</span> {t('totalCounts.items')}
                 </span>
               </div>
               {kalemler.length === 0 ? (
@@ -330,12 +330,12 @@ function DetayModal({ sayimId, sayimObj, onClose }) {
               <button onClick={() => { try { exportPDF(sayim, kalemler, t); } catch { toast.error(t('toast.pdfFailed')); } }}
                 className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                 style={{ borderColor: '#FECACA', color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA' }}>
-                <FileText className="w-4 h-4" /> PDF İndir
+                <FileText className="w-4 h-4" /> {t('action.pdf')}
               </button>
               <button onClick={() => { try { exportExcel(sayim, kalemler, t); } catch { toast.error(t('toast.excelFailed')); } }}
                 className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                 style={{ borderColor: '#BBF7D0', color: '#15803D', background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-                <FileSpreadsheet className="w-4 h-4" /> Excel İndir
+                <FileSpreadsheet className="w-4 h-4" /> {t('action.excel')}
               </button>
             </div>
 
@@ -344,7 +344,7 @@ function DetayModal({ sayimId, sayimObj, onClose }) {
               <button onClick={onClose}
                 className="w-full py-3 rounded-xl text-sm font-bold text-gray-500 transition-colors hover:bg-gray-50"
                 style={{ background: '#F3F4F6' }}>
-                Kapat
+                {t('action.close')}
               </button>
             </div>
           </>
@@ -396,7 +396,7 @@ function InfoModal({ sayim, onClose }) {
         <div className="px-5 py-3 flex items-center gap-2 border-b border-gray-100">
           <Calculator className="w-4 h-4 text-gray-400" />
           <span className="text-sm text-gray-500">
-            <span className="font-bold text-gray-900">{kaynaklar.length}</span> sayım toplandı
+            {t('totalCounts.mergedInfo', { n: kaynaklar.length })}
           </span>
         </div>
 
@@ -429,7 +429,7 @@ function InfoModal({ sayim, onClose }) {
           <button onClick={onClose}
             className="w-full py-3 rounded-xl text-sm font-bold text-gray-500 transition-colors hover:bg-gray-50"
             style={{ background: '#F3F4F6' }}>
-            Kapat
+            {t('action.close')}
           </button>
         </div>
       </div>
@@ -641,9 +641,9 @@ export default function ToplanmisSayimlarAdminPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader title="Toplanmış Sayımlar" stats={[
-        { icon: Calculator,    label: 'Toplam',      value: toplam, color: GRAD.purple },
-        { icon: ClipboardList, label: 'Bu Sayfada',  value: sayimlar.length, color: GRAD.teal },
+      <PageHeader title={t('nav.mergedCounts')} stats={[
+        { icon: Calculator,    label: t('pagination.total'),      value: toplam, color: GRAD.purple },
+        { icon: ClipboardList, label: t('pagination.showing'),  value: sayimlar.length, color: GRAD.teal },
       ]} />
 
       <div className="p-4 sm:p-6 lg:p-8 flex-1 space-y-4 overflow-auto">
@@ -652,7 +652,7 @@ export default function ToplanmisSayimlarAdminPage() {
         <div className="flex flex-wrap gap-2 items-center">
           <div className="relative flex-1 min-w-[160px]">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input type="text" placeholder="Sayım adı ara..."
+            <input type="text" placeholder={t('totalCounts.searchPlaceholder')}
               value={aramaInput} onChange={e => setAramaInput(e.target.value)}
               className="w-full pl-10 pr-8 py-2.5 text-sm rounded-xl border border-gray-200 bg-white outline-none focus:border-indigo-400" />
             {aramaInput && (

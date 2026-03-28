@@ -1674,6 +1674,21 @@ const translations = {
   // ══════════════════════════════════════
   // SAYFALAMA
   // ══════════════════════════════════════
+  'table.id': {
+    tr: 'ID',
+    az: 'ID',
+    ru: 'ID',
+  },
+  'pagination.total': {
+    tr: 'Toplam',
+    az: 'Cəmi',
+    ru: 'Всего',
+  },
+  'pagination.showing': {
+    tr: 'Bu Sayfada',
+    az: 'Bu Səhifədə',
+    ru: 'На странице',
+  },
   'pagination.page': {
     tr: 'Sayfa',
     az: 'Səhifə',
@@ -1804,6 +1819,11 @@ const translations = {
     az: 'Vəziyyət',
     ru: 'Статус',
   },
+  'status.inactive': {
+    tr: 'Pasif',
+    az: 'Deaktiv',
+    ru: 'Неактивный',
+  },
   'status.all': {
     tr: 'Tümü',
     az: 'Hamısı',
@@ -1831,6 +1851,21 @@ const translations = {
   },
 
   // ── Toplanmış Sayımlar Sayfası Ek ──
+  'totalCounts.merged': {
+    tr: 'Toplanan',
+    az: 'Toplanan',
+    ru: 'Объединено',
+  },
+  'totalCounts.mergedInfo': {
+    tr: '{n} sayım birleştirildi',
+    az: '{n} sayım birləşdirildi',
+    ru: '{n} подсчётов объединено',
+  },
+  'totalCounts.items': {
+    tr: 'kalem',
+    az: 'element',
+    ru: 'позиций',
+  },
   'totalCounts.sourceDetails': {
     tr: 'Toplanan sayımların detayları',
     az: 'Toplanmış sayımların təfərrüatları',
@@ -1870,6 +1905,11 @@ const translations = {
     tr: 'Henüz toplanmış sayım yok.',
     az: 'Hələ toplanmış sayım yoxdur.',
     ru: 'Объединённых подсчётов пока нет.',
+  },
+  'totalCounts.searchPlaceholder': {
+    tr: 'Sayım adı ara...',
+    az: 'Sayım adı axtar...',
+    ru: 'Поиск подсчёта...',
   },
   'totalCounts.sourceCounts': {
     tr: 'Kaynak Sayımlar',
