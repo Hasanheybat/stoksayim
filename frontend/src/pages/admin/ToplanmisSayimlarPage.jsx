@@ -545,7 +545,7 @@ function SilOnayModal({ sayim, onClose, onConfirm }) {
           </div>
         </div>
         <p className="text-sm text-gray-600 mb-5">
-          <span className="font-bold">{sayim.ad}</span> silinecek. Orijinal sayımlar etkilenmez.
+          <span className="font-bold">{sayim.ad}</span> {t('totalCounts.deleteConfirmText')}
         </p>
         <div className="grid grid-cols-2 gap-3">
           <button onClick={onClose}
@@ -724,7 +724,7 @@ export default function ToplanmisSayimlarAdminPage() {
                       <span className="flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
                         style={{ background: '#EEF2FF', color: '#6366F1' }}>
                         <Calculator className="w-3 h-3" />
-                        {kaynaklar.length} sayım
+                        {kaynaklar.length} {t('totalCounts.items')}
                       </span>
                     )}
                   </div>
@@ -840,11 +840,11 @@ export default function ToplanmisSayimlarAdminPage() {
               </div>
               <div>
                 <p className="font-bold text-gray-900 text-sm">{t('totalCounts.revertCount')}</p>
-                <p className="text-xs text-gray-400">Bu sayım tekrar aktif olacak</p>
+                <p className="text-xs text-gray-400">{t('totalCounts.revertInfo')}</p>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-5">
-              <span className="font-bold">{geriAlSayim.ad}</span> geri alınacak. Devam etmek istiyor musunuz?
+              <span className="font-bold">{geriAlSayim.ad}</span> {t('totalCounts.revertConfirmText')}
             </p>
             <div className="grid grid-cols-2 gap-3">
               <button onClick={() => setGeriAlSayim(null)}

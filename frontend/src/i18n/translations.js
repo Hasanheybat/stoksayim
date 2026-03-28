@@ -1906,6 +1906,21 @@ const translations = {
     az: 'Hələ toplanmış sayım yoxdur.',
     ru: 'Объединённых подсчётов пока нет.',
   },
+  'totalCounts.deleteConfirmText': {
+    tr: 'silinecek. Orijinal sayımlar etkilenmez.',
+    az: 'silinəcək. Orijinal sayımlar təsirlənməz.',
+    ru: 'будет удалён. Исходные подсчёты не затронуты.',
+  },
+  'totalCounts.revertInfo': {
+    tr: 'Bu sayım tekrar aktif olacak',
+    az: 'Bu sayım yenidən aktiv olacaq',
+    ru: 'Этот подсчёт снова станет активным',
+  },
+  'totalCounts.revertConfirmText': {
+    tr: 'geri alınacak. Devam etmek istiyor musunuz?',
+    az: 'geri alınacaq. Davam etmək istəyirsiniz?',
+    ru: 'будет отменён. Продолжить?',
+  },
   'totalCounts.searchPlaceholder': {
     tr: 'Sayım adı ara...',
     az: 'Sayım adı axtar...',
