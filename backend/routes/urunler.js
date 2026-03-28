@@ -259,7 +259,11 @@ router.get('/barkod/:barkod', async (req, res, next) => {
   );
 
   if (!kiRows.length) return res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
-  if (!kiRows[0].yetkiler?.urun?.goruntule) return res.status(403).json({ hata: 'Ürün görüntüleme yetkiniz yok.' });
+  const yetkiler = kiRows[0].yetkiler;
+  // Ürün görüntüleme VEYA sayım ekleme/düzenleme yetkisi varsa ürün aramasına izin ver
+  if (!yetkiler?.urun?.goruntule && !yetkiler?.sayim?.ekle && !yetkiler?.sayim?.duzenle) {
+    return res.status(403).json({ hata: 'Ürün görüntüleme yetkiniz yok.' });
+  }
 
   const [data] = await pool.execute(
     'SELECT * FROM isletme_urunler WHERE isletme_id = ? AND aktif = 1 AND barkodlar LIKE ?',
@@ -294,7 +298,11 @@ router.get('/', async (req, res, next) => {
   );
 
   if (!kiRows.length) return res.status(403).json({ hata: 'Bu işletmeye erişim yetkiniz yok.' });
-  if (!kiRows[0].yetkiler?.urun?.goruntule) return res.status(403).json({ hata: 'Ürün görüntüleme yetkiniz yok.' });
+  const yetkiler = kiRows[0].yetkiler;
+  // Ürün görüntüleme VEYA sayım ekleme/düzenleme yetkisi varsa ürün aramasına izin ver
+  if (!yetkiler?.urun?.goruntule && !yetkiler?.sayim?.ekle && !yetkiler?.sayim?.duzenle) {
+    return res.status(403).json({ hata: 'Ürün görüntüleme yetkiniz yok.' });
+  }
 
   const where = ['isletme_id = ?', 'aktif = 1'];
   const params = [isletme_id];
