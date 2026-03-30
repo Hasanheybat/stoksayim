@@ -331,6 +331,16 @@ router.get('/', async (req, res, next) => {
 // ── Admin yetkisi gerektiren rotalar ──
 router.use(adminGuard);
 
+// GET /api/urunler/birimler — Sistemdeki tüm birimleri listele
+router.get('/birimler', async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT id, ad FROM birimler ORDER BY ad');
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ hata: msg(req.lang, 'SERVER_ERROR') });
+  }
+});
+
 // GET /api/urunler/sablon — Boş şablon Excel indir
 router.get('/sablon', (req, res) => {
   const ws = XLSX.utils.aoa_to_sheet([
@@ -624,6 +634,15 @@ router.post('/yukle', (req, res, next) => {
 
   if (preview === 'true') {
     return res.json(sonuclar);
+  }
+
+  // Excel'deki birimleri kontrol et, sistemde yoksa ekle
+  const birimSet = new Set(upsertListesi.map(u => u.birim).filter(Boolean));
+  for (const birim of birimSet) {
+    await pool.execute(
+      'INSERT IGNORE INTO birimler (ad) VALUES (?)',
+      [birim]
+    );
   }
 
   for (const urun of upsertListesi) {

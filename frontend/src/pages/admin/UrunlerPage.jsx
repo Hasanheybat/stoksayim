@@ -15,7 +15,7 @@ const GRAD = {
   red:    'linear-gradient(135deg,#EF4444,#DC2626)',
 };
 
-const BIRIM_SECENEKLER = ['ADET', 'KG', 'LT', 'MT', 'KUTU', 'PAKET', 'KOLI', 'TANE'];
+const BIRIM_VARSAYILAN = ['ADET', 'KG', 'LT', 'MT', 'KUTU', 'PAKET', 'KOLI', 'TANE'];
 
 /* ── Page Header ── */
 function PageHeader({ title, stats }) {
@@ -48,7 +48,18 @@ function UrunModal({ open, onClose, initial, isletmeId, isletmeler, onSaved }) {
   const [loading, setLoading]   = useState(false);
   const [silOnay, setSilOnay]   = useState(false);
   const [barkodGiris, setBarkodGiris] = useState('');
+  const [birimler, setBirimler] = useState(BIRIM_VARSAYILAN);
   const barkodRef = useRef();
+
+  // Birimleri API'den çek
+  useEffect(() => {
+    api.get('/urunler/birimler').then(res => {
+      const apiBirimler = res.data.map(b => b.ad);
+      // API + varsayılanları birleştir, tekrar olmasın
+      const hepsi = [...new Set([...apiBirimler, ...BIRIM_VARSAYILAN])].sort();
+      setBirimler(hepsi);
+    }).catch(() => setBirimler(BIRIM_VARSAYILAN));
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -190,7 +201,7 @@ function UrunModal({ open, onClose, initial, isletmeId, isletmeler, onSaved }) {
             <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{t('products.unit')}</label>
             <select value={form.birim} onChange={e => set('birim', e.target.value)}
               className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-indigo-400 bg-gray-50">
-              {BIRIM_SECENEKLER.map(b => <option key={b} value={b}>{b}</option>)}
+              {[...new Set([form.birim, ...birimler])].filter(Boolean).map(b => <option key={b} value={b}>{b}</option>)}
             </select>
           </div>
 
