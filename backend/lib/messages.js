@@ -410,6 +410,11 @@ const messages = {
     az: 'Ən azı 2 sayım seçilməlidir.',
     ru: 'Необходимо выбрать минимум 2 подсчёта.',
   },
+  MERGE_MIN_ONE: {
+    tr: 'En az 1 sayım seçilmelidir.',
+    az: 'Ən azı 1 sayım seçilməlidir.',
+    ru: 'Необходимо выбрать минимум 1 подсчёт.',
+  },
   MERGE_NAME_REQUIRED: {
     tr: 'Toplanmış sayım adı zorunludur.',
     az: 'Toplanmış sayım adı tələb olunur.',

@@ -190,6 +190,45 @@ export default function AdminAyarlarPage() {
         </div>
       </div>
 
+      {/* Tema Seçimi */}
+      <div className="bg-white rounded-2xl p-5 border border-gray-100 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#6366F1,#8B5CF6)' }}>
+            <svg width="16" height="16" fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          </span>
+          <div>
+            <p className="text-xs font-bold text-gray-700">Arayüz Teması</p>
+            <p className="text-[10px] text-gray-400">Yeni Minupos Inventory temasını deneyin</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              document.cookie = 'stoksay_theme=; Path=/; Max-Age=0';
+              window.location.reload();
+            }}
+            className="flex-1 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all"
+            style={!document.cookie.includes('stoksay_theme=ether')
+              ? { background: '#6366F1', color: 'white' }
+              : { background: '#F3F4F6', color: '#6B7280' }}
+          >
+            Klasik Tema
+          </button>
+          <button
+            onClick={() => {
+              document.cookie = 'stoksay_theme=ether; Path=/; Max-Age=31536000; SameSite=Lax';
+              window.location.reload();
+            }}
+            className="flex-1 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all"
+            style={document.cookie.includes('stoksay_theme=ether')
+              ? { background: 'linear-gradient(135deg, #4343d5, #5d5fef)', color: 'white' }
+              : { background: '#F3F4F6', color: '#6B7280' }}
+          >
+            ✨ Minupos Ether
+          </button>
+        </div>
+      </div>
+
       <p className="text-center text-xs text-gray-300 pb-1">{t('app.footer')}</p>
     </div>
   );

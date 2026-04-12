@@ -588,8 +588,8 @@ router.delete('/:id/kalem/:kalem_id', async (req, res) => {
 router.post('/topla', yetkiGuard('toplam_sayim', 'ekle', 'body'), async (req, res) => {
   const { sayim_ids, ad, isletme_id } = req.body;
 
-  if (!sayim_ids || !Array.isArray(sayim_ids) || sayim_ids.length < 2) {
-    return res.status(400).json({ hata: msg(req.lang, 'MERGE_MIN_TWO') });
+  if (!sayim_ids || !Array.isArray(sayim_ids) || sayim_ids.length < 1) {
+    return res.status(400).json({ hata: msg(req.lang, 'MERGE_MIN_ONE') });
   }
   if (!ad || !ad.trim()) {
     return res.status(400).json({ hata: msg(req.lang, 'MERGE_NAME_REQUIRED') });

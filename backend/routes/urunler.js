@@ -95,7 +95,7 @@ router.use(authGuard);
 router.put('/:id', async (req, res) => {
   if (!await checkUrunYetki(req, res, 'duzenle')) return;
 
-  const { urun_adi, urun_kodu, isim_2, barkodlar, birim } = req.body;
+  const { urun_adi, urun_kodu, isim_2, barkodlar, birim, kategori } = req.body;
 
   if (!urun_adi?.trim()) return res.status(400).json({ hata: msg(req.lang, 'PRODUCT_NAME_EMPTY') });
   // urun_kodu boşsa mevcut kodu koru
@@ -126,11 +126,11 @@ router.put('/:id', async (req, res) => {
 
     await conn.execute(
       `UPDATE isletme_urunler SET
-        urun_adi = ?, urun_kodu = ?, isim_2 = ?, barkodlar = ?, birim = ?,
+        urun_adi = ?, urun_kodu = ?, isim_2 = ?, barkodlar = ?, birim = ?, kategori = ?,
         son_guncelleme = NOW(), guncelleme_kaynagi = 'kullanici',
         kullanici_guncelledi = 1, guncelleyen_kullanici_id = ?
       WHERE id = ?`,
-      [urun_adi.trim(), finalKod, (isim_2 || '').trim(), barkodStr, birim || null, req.user.id, req.params.id]
+      [urun_adi.trim(), finalKod, (isim_2 || '').trim(), barkodStr, birim || null, kategori ?? null, req.user.id, req.params.id]
     );
 
     await conn.commit();
